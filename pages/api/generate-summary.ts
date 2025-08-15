@@ -2,41 +2,40 @@
 import type { NextApiRequest, NextApiResponse } from "next";
 import { createClient } from "@supabase/supabase-js";
 
+// Required env vars (Vercel → Project → Settings → Environment Variables)
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const SUPABASE_ANON = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
 const SUPABASE_SERVICE = process.env.SUPABASE_SERVICE_ROLE_KEY!;
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY!;
 
-// Clamp big user pastes so the model doesn't over-reason and hit caps
+// Clamp big pastes so the model doesn't waste output budget
 function clamp(s: unknown, max = 10000) {
   const t = (typeof s === "string" ? s : s ?? "").toString();
   return t.length > max ? t.slice(0, max) + "\n\n[...truncated...]" : t;
 }
 
-/** Best-effort text extraction for the Responses API */
+// Best-effort text extraction for the Responses API
 function extractText(resp: any): string {
   if (typeof resp?.output_text === "string" && resp.output_text.trim()) {
     return resp.output_text.trim();
   }
   if (Array.isArray(resp?.output)) {
-    const pieces: string[] = [];
+    const parts: string[] = [];
     for (const item of resp.output) {
-      // try standard "message" content first
       const content = item?.content;
       if (Array.isArray(content)) {
         for (const c of content) {
-          if (typeof c?.text === "string") pieces.push(c.text);
-          else if (typeof c === "string") pieces.push(c);
-          else if (typeof c?.output_text === "string") pieces.push(c.output_text);
+          if (typeof c?.text === "string") parts.push(c.text);
+          else if (typeof c === "string") parts.push(c);
+          else if (typeof c?.output_text === "string") parts.push(c.output_text);
         }
       } else if (typeof item?.output_text === "string") {
-        pieces.push(item.output_text);
+        parts.push(item.output_text);
       }
     }
-    const joined = pieces.join("\n").trim();
+    const joined = parts.join("\n").trim();
     if (joined) return joined;
   }
-  // chat-style fallback
   const msg = resp?.choices?.[0]?.message?.content;
   if (typeof msg === "string" && msg.trim()) return msg.trim();
   if (Array.isArray(msg)) {
@@ -72,6 +71,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       hmNotes?: string;
       recruiterNotes?: string;
     };
+
     const jobTitle = clamp(body.jobTitle, 200);
     const jobDescription = clamp(body.jobDescription, 12000);
     const hmNotes = clamp(body.hmNotes, 8000);
@@ -81,14 +81,14 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       return send(res, 400, { error: "Missing jobTitle or jobDescription" });
     }
 
-    // Get user id (non-fatal if missing)
+    // Resolve caller (non-fatal if missing)
     let userId: string | null = null;
     try {
       const { data } = await supabaseUser.auth.getUser();
       if (data?.user) userId = data.user.id;
     } catch {}
 
-    // Tighter instructions: keep it under ~600 words
+    // Tight prompt; asks for Markdown only
     const prompt = `
 You are Aligned, the trust layer between recruiters and hiring managers.
 
@@ -124,7 +124,7 @@ Recruiter Notes:
 ${recruiterNotes || "(none provided)"}  
 `.trim();
 
-    // Call OpenAI with more room and lower reasoning effort
+    // OpenAI Responses API using a non-reasoning model
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 45_000);
 
@@ -136,11 +136,9 @@ ${recruiterNotes || "(none provided)"}
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        model: "gpt-5-mini",           // this one works for your key
+        model: "gpt-4o-mini",   // <— non-reasoning, reliably returns text
         input: prompt,
-        reasoning: { effort: "low" },  // reduce chain-of-thought token burn
-        // Don't send temperature to gpt-5
-        max_output_tokens: 1600,       // more output headroom
+        max_output_tokens: 1200,
       }),
     });
 
@@ -152,24 +150,12 @@ ${recruiterNotes || "(none provided)"}
     }
 
     const aiJson = await aiRes.json();
-
-    // If the model says "incomplete because max_output_tokens", surface it clearly
-    if (aiJson?.status === "incomplete" && aiJson?.incomplete_details?.reason) {
-      return send(res, 502, {
-        error: `OpenAI stopped early (${aiJson.incomplete_details.reason}). Try again; we increased limits.`,
-        raw: aiJson,
-      });
-    }
-
     const summaryMarkdown = extractText(aiJson);
     if (!summaryMarkdown) {
-      return send(res, 502, {
-        error: `OpenAI response had no text.`,
-        raw: aiJson,
-      });
+      return send(res, 502, { error: "OpenAI response had no text.", raw: aiJson });
     }
 
-    // Save to Supabase
+    // Save to public.summaries
     const { data, error } = await supabaseAdmin
       .from("summaries")
       .insert([
