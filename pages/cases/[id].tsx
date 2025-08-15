@@ -1,146 +1,151 @@
 // pages/cases/[id].tsx
-import { GetServerSideProps } from "next";
 import Head from "next/head";
-import ReactMarkdown from "react-markdown";
+import { useRouter } from "next/router";
+import { useEffect, useMemo, useState } from "react";
 import { createClient } from "@supabase/supabase-js";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
+import { Inter } from "next/font/google";
 
-type SummaryRow = {
+// Premium font (no CSS edits needed)
+const inter = Inter({ subsets: ["latin"], display: "swap", variable: "--font-inter" });
+
+// —— Types ——————————————————————————————————————————
+type CaseRecord = {
   id: string;
-  job_title: string | null;
-  job_description: string | null;
-  hm_notes: string | null;
-  recruiter_notes: string | null;
-  summary_markdown: string | null;
-  created_at: string;
+  title: string | null;
+  created_at: string | null;
+  summary_markdown: string | null; // your generated candidate summary (Markdown)
 };
 
-export const getServerSideProps: GetServerSideProps = async (ctx) => {
-  const id = ctx.params?.id as string;
+// —— Helpers ——————————————————————————————————————————
+const supabase = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL as string,
+  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY as string
+);
 
-  // Use service role on the server ONLY (safe inside getServerSideProps)
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
-
-  const supabase = createClient(supabaseUrl, serviceKey, {
-    auth: { persistSession: false, detectSessionInUrl: false },
-  });
-
-  const { data, error } = await supabase
-    .from("summaries")
-    .select("*")
-    .eq("id", id)
-    .single();
-
-  if (error || !data) {
-    console.error("Case fetch error:", error);
-    return { notFound: true };
+function formatDate(iso: string | null | undefined) {
+  if (!iso) return "";
+  try {
+    const d = new Date(iso);
+    return new Intl.DateTimeFormat(undefined, {
+      dateStyle: "medium",
+      timeStyle: "short",
+    }).format(d);
+  } catch {
+    return iso ?? "";
   }
+}
 
-  return { props: { row: data } };
-};
+// —— Page ————————————————————————————————————————————
+export default function CaseDetailPage() {
+  const router = useRouter();
+  const { id } = router.query;
 
-export default function CasePage({ row }: { row: SummaryRow }) {
+  const [data, setData] = useState<CaseRecord | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [err, setErr] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!id || typeof id !== "string") return;
+
+    let cancelled = false;
+    (async () => {
+      try {
+        setLoading(true);
+        setErr(null);
+
+        // Adjust the table/column names if yours differ.
+        const { data: row, error } = await supabase
+          .from("cases")
+          .select("id,title,created_at,summary_markdown")
+          .eq("id", id)
+          .single();
+
+        if (error) throw error;
+        if (!cancelled) setData(row as CaseRecord);
+      } catch (e: any) {
+        if (!cancelled) setErr(e?.message ?? "Failed to load");
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [id]);
+
+  const pageTitle = useMemo(
+    () => (data?.title ? `${data.title} – Candidate Summary` : "Candidate Summary"),
+    [data?.title]
+  );
+
   return (
-    <main
-      style={{
-        maxWidth: 900,
-        margin: "24px auto",
-        padding: "0 16px",
-        fontFamily: "ui-sans-serif, system-ui",
-      }}
-    >
+    <>
       <Head>
-        <title>{row.job_title ? `${row.job_title} – Report` : "Report"}</title>
+        <title>{pageTitle}</title>
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
       </Head>
 
-      <header
-        style={{
-          display: "flex",
-          justifyContent: "space-between",
-          alignItems: "center",
-          marginBottom: 16,
-        }}
-      >
-        <div>
-          <h1 style={{ margin: 0 }}>{row.job_title || "Report"}</h1>
-          <div style={{ fontSize: 12, opacity: 0.7 }}>
-            {new Date(row.created_at).toLocaleString()}
+      <div className={`${inter.variable} min-h-screen bg-neutral-50`}>
+        <header className="border-b bg-white">
+          <div className="mx-auto max-w-5xl px-6 py-4 flex items-center justify-between">
+            <div className="text-xl font-semibold tracking-tight">Aligned</div>
+            <button
+              onClick={() => router.push("/dashboard")}
+              className="text-sm text-neutral-600 hover:text-neutral-900 transition"
+            >
+              ← Back to Dashboard
+            </button>
           </div>
-        </div>
-        <a
-          href="/dashboard"
-          style={{
-            padding: "8px 12px",
-            borderRadius: 10,
-            border: "1px solid #e5e7eb",
-            background: "white",
-            textDecoration: "none",
-          }}
-        >
-          ← Back to Dashboard
-        </a>
-      </header>
+        </header>
 
-      {/* AI Summary (Markdown) */}
-      <section
-        style={{
-          border: "1px solid #e5e7eb",
-          borderRadius: 12,
-          padding: 16,
-          marginBottom: 24,
-        }}
-      >
-        <h2 style={{ marginTop: 0 }}>Candidate / Market Summary</h2>
-        <div style={{ lineHeight: 1.6 }}>
-          <ReactMarkdown>
-            {row.summary_markdown || "No summary generated."}
-          </ReactMarkdown>
-        </div>
-      </section>
+        <main className="mx-auto max-w-3xl px-6 py-8">
+          {loading && (
+            <div className="animate-pulse rounded-2xl border border-neutral-200 bg-white p-8 shadow-sm">
+              <div className="h-6 w-1/3 bg-neutral-200 rounded mb-4" />
+              <div className="h-4 w-2/3 bg-neutral-200 rounded mb-1.5" />
+              <div className="h-4 w-1/2 bg-neutral-200 rounded mb-1.5" />
+              <div className="h-4 w-5/6 bg-neutral-200 rounded" />
+            </div>
+          )}
 
-      {/* Raw inputs for reference */}
-      <section
-        style={{
-          border: "1px solid #e5e7eb",
-          borderRadius: 12,
-          padding: 16,
-          marginBottom: 16,
-        }}
-      >
-        <h3 style={{ marginTop: 0 }}>Job Description (raw)</h3>
-        <pre style={{ whiteSpace: "pre-wrap", margin: 0 }}>
-          {row.job_description}
-        </pre>
-      </section>
+          {!loading && err && (
+            <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">
+              {err}
+            </div>
+          )}
 
-      {row.hm_notes ? (
-        <section
-          style={{
-            border: "1px solid #e5e7eb",
-            borderRadius: 12,
-            padding: 16,
-            marginBottom: 16,
-          }}
-        >
-          <h3 style={{ marginTop: 0 }}>HM Notes</h3>
-          <pre style={{ whiteSpace: "pre-wrap", margin: 0 }}>{row.hm_notes}</pre>
-        </section>
-      ) : null}
+          {!loading && data && (
+            <article className="rounded-2xl border border-neutral-200 bg-white p-8 shadow-sm">
+              <div className="mb-6">
+                <h1 className="text-2xl font-semibold tracking-tight text-neutral-900">
+                  {data.title || "Untitled Case"}
+                </h1>
+                <p className="mt-1 text-sm text-neutral-500">
+                  {formatDate(data.created_at)}
+                </p>
+              </div>
 
-      {row.recruiter_notes ? (
-        <section
-          style={{
-            border: "1px solid #e5e7eb",
-            borderRadius: 12,
-            padding: 16,
-          }}
-        >
-          <h3 style={{ marginTop: 0 }}>Recruiter Notes</h3>
-          <pre style={{ whiteSpace: "pre-wrap", margin: 0 }}>
-            {row.recruiter_notes}
-          </pre>
-        </section>
-      ) : null}
-    </main>
+              {/* Markdown content */}
+              <div
+                className={`
+                  prose prose-neutral max-w-none
+                  prose-headings:font-semibold prose-h1:mb-3 prose-h2:mb-2
+                  prose-p:text-neutral-800 prose-strong:text-neutral-900
+                  prose-li:my-1 prose-ul:ml-5
+                `}
+                style={{ fontFamily: "var(--font-inter), ui-sans-serif, system-ui" }}
+              >
+                <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                  {data.summary_markdown || "_No summary available._"}
+                </ReactMarkdown>
+              </div>
+            </article>
+          )}
+        </main>
+      </div>
+    </>
   );
 }
