@@ -3,8 +3,14 @@ import Head from "next/head";
 import { useState } from "react";
 import { useRouter } from "next/router";
 import { Inter } from "next/font/google";
+import { createClient } from "@supabase/supabase-js";
 
 const inter = Inter({ subsets: ["latin"], display: "swap", variable: "--font-inter" });
+
+const supabase = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL as string,
+  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY as string
+);
 
 export default function NewSummaryPage() {
   const router = useRouter();
@@ -23,6 +29,11 @@ export default function NewSummaryPage() {
 
       if (!raw.trim()) throw new Error("Please paste something into the summary box.");
 
+      // 🔐 get the currently logged-in user's id
+      const { data: userData, error: userErr } = await supabase.auth.getUser();
+      if (userErr) throw userErr;
+      const userId = userData?.user?.id || null;
+
       const res = await fetch("/api/generate-summary", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -30,6 +41,7 @@ export default function NewSummaryPage() {
           input: raw,
           candidateName: candidateName || undefined,
           role: role || undefined,
+          userId, // 👉 send user_id so DB NOT NULL is satisfied
         }),
       });
 
@@ -42,7 +54,6 @@ export default function NewSummaryPage() {
       const id = j.id as string | undefined;
       if (!id) throw new Error("Saved, but no ID returned.");
 
-      // Go to the formatted case page
       router.push(`/cases/${id}`);
     } catch (e: any) {
       setErr(e?.message ?? "Could not save.");
@@ -76,10 +87,15 @@ export default function NewSummaryPage() {
             Start a New Summary
           </h1>
 
-          <form onSubmit={handleSubmit} className="rounded-2xl border border-neutral-200 bg-white p-6 shadow-sm space-y-4">
+          <form
+            onSubmit={handleSubmit}
+            className="rounded-2xl border border-neutral-200 bg-white p-6 shadow-sm space-y-4"
+          >
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
               <div>
-                <label className="block text-sm text-neutral-600 mb-1">Candidate Name (optional)</label>
+                <label className="block text-sm text-neutral-600 mb-1">
+                  Candidate Name (optional)
+                </label>
                 <input
                   className="w-full rounded-xl border border-neutral-300 px-3 py-2 outline-none focus:ring-2 focus:ring-neutral-900/10"
                   value={candidateName}
