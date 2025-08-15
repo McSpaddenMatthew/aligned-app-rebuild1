@@ -27,19 +27,11 @@ function formatDate(iso?: string | null) {
 }
 
 function getTitle(row: AnyRow, fallbackId: string) {
-  return (
-    row.title ||
-    row.name ||
-    row.case_name ||
-    row.label ||
-    `Case ${fallbackId}`
-  );
+  return row.title || row.name || row.case_name || row.label || `Case ${fallbackId}`;
 }
-
 function getCreatedAt(row: AnyRow) {
   return row.created_at || row.createdAt || row.inserted_at || row.created || null;
 }
-
 function getMarkdown(row: AnyRow) {
   return (
     row.summary_markdown ||
@@ -69,37 +61,22 @@ export default function CaseDetailPage() {
         setLoading(true);
         setErr(null);
 
-        // Try to get by "id"
-        let { data, error } = await supabase
+        // Build a multi-column OR filter so any id-like column works
+        const cols = ["id", "public_id", "case_id", "uuid", "slug"];
+        const orFilter = cols.map((c) => `${c}.eq.${id}`).join(",");
+
+        const { data, error } = await supabase
           .from("cases")
           .select("*")
-          .eq("id", id)
-          .order("created_at", { ascending: false })
+          .or(orFilter)
           .limit(1);
 
-        // Try alternate ID columns if nothing found
-        if ((!data || data.length === 0) && !error) {
-          const altCols = ["public_id", "case_id", "uuid", "slug"];
-          for (const col of altCols) {
-            const alt = await supabase
-              .from("cases")
-              .select("*")
-              .eq(col, id)
-              .order("created_at", { ascending: false })
-              .limit(1);
-            if (alt.data && alt.data.length > 0) {
-              data = alt.data;
-              error = null;
-              break;
-            }
-          }
-        }
-
         if (error) throw error;
-        const foundRow = (data && data[0]) ? data[0] : null;
-        if (!foundRow) throw new Error("No case found for this ID.");
 
-        if (!cancelled) setRow(foundRow as AnyRow);
+        const found = (data && data[0]) || null;
+        if (!found) throw new Error("No case found for this ID.");
+
+        if (!cancelled) setRow(found);
       } catch (e: any) {
         if (!cancelled) setErr(e?.message ?? "Failed to load");
       } finally {
