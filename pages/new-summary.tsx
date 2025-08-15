@@ -1,12 +1,13 @@
 // pages/new-summary.tsx
 import Head from "next/head";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/router";
 import { Inter } from "next/font/google";
 import { createClient } from "@supabase/supabase-js";
 
 const inter = Inter({ subsets: ["latin"], display: "swap", variable: "--font-inter" });
 
+// ✅ Client-side Supabase (must be defined before using in effects/handlers)
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL as string,
   process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY as string
@@ -21,6 +22,18 @@ export default function NewSummaryPage() {
   const [submitting, setSubmitting] = useState(false);
   const [err, setErr] = useState<string | null>(null);
 
+  // 🚦 Ensure the user is logged in; otherwise redirect to your login/landing
+  useEffect(() => {
+    (async () => {
+      const { data } = await supabase.auth.getSession();
+      const session = data?.session;
+      if (!session) {
+        // Change "/" if you have a dedicated login route
+        router.replace("/");
+      }
+    })();
+  }, [router]);
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     try {
@@ -29,7 +42,7 @@ export default function NewSummaryPage() {
 
       if (!raw.trim()) throw new Error("Please paste something into the summary box.");
 
-      // 🔐 get the currently logged-in user's id
+      // 🔐 get the current user id to satisfy NOT NULL user_id
       const { data: userData, error: userErr } = await supabase.auth.getUser();
       if (userErr) throw userErr;
       const userId = userData?.user?.id || null;
@@ -41,17 +54,17 @@ export default function NewSummaryPage() {
           input: raw,
           candidateName: candidateName || undefined,
           role: role || undefined,
-          userId, // 👉 send user_id so DB NOT NULL is satisfied
+          userId, // 👈 send user_id to the API
         }),
       });
 
       if (!res.ok) {
         const j = await res.json().catch(() => ({}));
-        throw new Error(j?.error || "Failed to generate/save summary.");
+        throw new Error(j?.error || `HTTP ${res.status}`);
       }
 
       const j = await res.json();
-      const id = j.id as string | undefined;
+      const id = j?.id as string | undefined;
       if (!id) throw new Error("Saved, but no ID returned.");
 
       router.push(`/cases/${id}`);
