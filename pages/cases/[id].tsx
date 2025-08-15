@@ -61,19 +61,23 @@ export default function CaseDetailPage() {
         setLoading(true);
         setErr(null);
 
-        // Build a multi-column OR filter so any id-like column works
-        const cols = ["id", "public_id", "case_id", "uuid", "slug"];
-        const orFilter = cols.map((c) => `${c}.eq.${id}`).join(",");
+        // Try common ID columns one-by-one so we never reference a missing column.
+        const idCols = ["id", "case_id", "uuid", "slug"]; // add/remove to match your schema
+        let found: AnyRow | null = null;
+        for (const col of idCols) {
+          const { data, error } = await supabase
+            .from("cases")
+            .select("*")
+            .eq(col, id)
+            .limit(1);
 
-        const { data, error } = await supabase
-          .from("cases")
-          .select("*")
-          .or(orFilter)
-          .limit(1);
+          if (error) continue;             // skip unknown/invalid column
+          if (data && data.length > 0) {   // stop at first hit
+            found = data[0];
+            break;
+          }
+        }
 
-        if (error) throw error;
-
-        const found = (data && data[0]) || null;
         if (!found) throw new Error("No case found for this ID.");
 
         if (!cancelled) setRow(found);
@@ -84,9 +88,7 @@ export default function CaseDetailPage() {
       }
     })();
 
-    return () => {
-      cancelled = true;
-    };
+    return () => { cancelled = true; };
   }, [id]);
 
   const pageTitle = useMemo(() => getTitle(row || {}, id || ""), [row, id]);
@@ -156,3 +158,4 @@ export default function CaseDetailPage() {
     </>
   );
 }
+
