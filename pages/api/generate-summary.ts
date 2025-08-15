@@ -2,29 +2,26 @@
 import type { NextApiRequest, NextApiResponse } from "next";
 import { createClient } from "@supabase/supabase-js";
 
-/**
- * Required env vars (set in Vercel → Project → Settings → Environment Variables)
- * - NEXT_PUBLIC_SUPABASE_URL
- * - NEXT_PUBLIC_SUPABASE_ANON_KEY
- * - SUPABASE_SERVICE_ROLE_KEY     (server-only; never expose to client)
- * - OPENAI_API_KEY
- */
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const SUPABASE_ANON = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
 const SUPABASE_SERVICE = process.env.SUPABASE_SERVICE_ROLE_KEY!;
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY!;
 
-/** Try to pull plain text from any valid Responses API shape */
+// Clamp big user pastes so the model doesn't over-reason and hit caps
+function clamp(s: unknown, max = 10000) {
+  const t = (typeof s === "string" ? s : s ?? "").toString();
+  return t.length > max ? t.slice(0, max) + "\n\n[...truncated...]" : t;
+}
+
+/** Best-effort text extraction for the Responses API */
 function extractText(resp: any): string {
-  // Convenience field some SDKs expose
   if (typeof resp?.output_text === "string" && resp.output_text.trim()) {
     return resp.output_text.trim();
   }
-
-  // Generic Responses API: output[] with content[] items (type: "output_text" or similar)
   if (Array.isArray(resp?.output)) {
     const pieces: string[] = [];
     for (const item of resp.output) {
+      // try standard "message" content first
       const content = item?.content;
       if (Array.isArray(content)) {
         for (const c of content) {
@@ -39,82 +36,80 @@ function extractText(resp: any): string {
     const joined = pieces.join("\n").trim();
     if (joined) return joined;
   }
-
-  // Back-compat for chat-style responses
+  // chat-style fallback
   const msg = resp?.choices?.[0]?.message?.content;
   if (typeof msg === "string" && msg.trim()) return msg.trim();
   if (Array.isArray(msg)) {
     const m = msg.map((c: any) => (typeof c === "string" ? c : c?.text || "")).join("");
     if (m.trim()) return m.trim();
   }
-
   return "";
 }
 
-/** Helper to send JSON with proper status */
-function json(res: NextApiResponse, code: number, payload: any) {
+function send(res: NextApiResponse, code: number, payload: any) {
   res.status(code).json(payload);
 }
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
-  if (req.method !== "POST") return json(res, 405, { error: "Method not allowed" });
-
-  // Basic env checks to fail fast in misconfigurations
+  if (req.method !== "POST") return send(res, 405, { error: "Method not allowed" });
   if (!SUPABASE_URL || !SUPABASE_ANON || !SUPABASE_SERVICE) {
-    return json(res, 500, { error: "Supabase environment variables are missing" });
+    return send(res, 500, { error: "Supabase environment variables are missing" });
   }
-  if (!OPENAI_API_KEY) {
-    return json(res, 500, { error: "OPENAI_API_KEY is not set" });
-  }
+  if (!OPENAI_API_KEY) return send(res, 500, { error: "OPENAI_API_KEY is not set" });
 
   const supabaseUser = createClient(SUPABASE_URL, SUPABASE_ANON, {
     auth: { persistSession: false, detectSessionInUrl: false },
-    // Forward any Authorization header from the browser so we can tie the row to the caller
     global: { headers: { Authorization: req.headers.authorization || "" } },
   });
-
   const supabaseAdmin = createClient(SUPABASE_URL, SUPABASE_SERVICE, {
     auth: { persistSession: false, detectSessionInUrl: false },
   });
 
   try {
-    const { jobTitle, jobDescription, hmNotes, recruiterNotes } = (req.body || {}) as {
+    const body = (req.body || {}) as {
       jobTitle?: string;
       jobDescription?: string;
       hmNotes?: string;
       recruiterNotes?: string;
     };
+    const jobTitle = clamp(body.jobTitle, 200);
+    const jobDescription = clamp(body.jobDescription, 12000);
+    const hmNotes = clamp(body.hmNotes, 8000);
+    const recruiterNotes = clamp(body.recruiterNotes, 4000);
 
     if (!jobTitle || !jobDescription) {
-      return json(res, 400, { error: "Missing jobTitle or jobDescription" });
+      return send(res, 400, { error: "Missing jobTitle or jobDescription" });
     }
 
-    // Resolve the caller (if they passed a Supabase session token)
+    // Get user id (non-fatal if missing)
     let userId: string | null = null;
     try {
       const { data } = await supabaseUser.auth.getUser();
       if (data?.user) userId = data.user.id;
-    } catch {
-      // Non-fatal; we can still store a summary without user_id
-    }
+    } catch {}
 
-    // Prompt crafted for concise, manager-ready output
+    // Tighter instructions: keep it under ~600 words
     const prompt = `
 You are Aligned, the trust layer between recruiters and hiring managers.
-Create a concise, structured candidate/market summary in **Markdown** with EXACTLY these sections:
+
+Write a concise **Markdown** summary **<= 600 words** with EXACTLY these sections:
 
 1) What You Shared – What the Candidate/Market Brings
-   - Bullet comparison of role needs vs likely candidate strengths (infer needs from JD/HM notes).
+   - 4–7 bullets mapping role needs to candidate strengths (infer needs from JD/HM notes).
 
-2) Why This Role Is Hard / Market Reality (1–4 bullets)
+2) Why This Role Is Hard / Market Reality
+   - 3–5 bullets.
 
 3) Known Risks & Mitigations
-   - Two-column table (Risk | Mitigation), 3–6 rows.
+   - Two-column table with 3–6 rows (Risk | Mitigation).
 
-4) Outcomes to Prioritize in Screens (bulleted, measurable)
+4) Outcomes to Prioritize in Screens
+   - 4–6 measurable bullets.
 
 5) Interview Focus Guide
-   - Bullets with pointed probing questions tied to the JD.
+   - 5–8 bullets with pointed probing questions tied to the JD.
+
+Do NOT include any preamble or headings like "Summary:". Output Markdown only.
 
 Job Title:
 ${jobTitle}
@@ -126,14 +121,12 @@ HM Notes:
 ${hmNotes || "(none provided)"}
 
 Recruiter Notes:
-${recruiterNotes || "(none provided)"}
-
-Output only the Markdown summary. Do not add headers like "Summary:" or any preamble.
+${recruiterNotes || "(none provided)"}  
 `.trim();
 
-    // Call OpenAI Responses API (no temperature; gpt-5 rejects it)
+    // Call OpenAI with more room and lower reasoning effort
     const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 30_000);
+    const timeout = setTimeout(() => controller.abort(), 45_000);
 
     const aiRes = await fetch("https://api.openai.com/v1/responses", {
       method: "POST",
@@ -143,29 +136,40 @@ Output only the Markdown summary. Do not add headers like "Summary:" or any prea
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        model: "gpt-5-mini", // <-- Your account has this (verified). Change later if desired.
+        model: "gpt-5-mini",           // this one works for your key
         input: prompt,
-        max_output_tokens: 900,
+        reasoning: { effort: "low" },  // reduce chain-of-thought token burn
+        // Don't send temperature to gpt-5
+        max_output_tokens: 1600,       // more output headroom
       }),
     });
 
     clearTimeout(timeout);
 
     if (!aiRes.ok) {
-      const errText = await aiRes.text();
-      return json(res, 502, { error: `OpenAI error: ${errText.slice(0, 900)}` });
+      const errTxt = await aiRes.text();
+      return send(res, 502, { error: `OpenAI error: ${errTxt.slice(0, 900)}` });
     }
 
     const aiJson = await aiRes.json();
-    const summaryMarkdown = extractText(aiJson);
 
-    if (!summaryMarkdown) {
-      return json(res, 502, {
-        error: `OpenAI response had no text. Raw: ${JSON.stringify(aiJson).slice(0, 900)}`,
+    // If the model says "incomplete because max_output_tokens", surface it clearly
+    if (aiJson?.status === "incomplete" && aiJson?.incomplete_details?.reason) {
+      return send(res, 502, {
+        error: `OpenAI stopped early (${aiJson.incomplete_details.reason}). Try again; we increased limits.`,
+        raw: aiJson,
       });
     }
 
-    // Insert into public.summaries and return the new id
+    const summaryMarkdown = extractText(aiJson);
+    if (!summaryMarkdown) {
+      return send(res, 502, {
+        error: `OpenAI response had no text.`,
+        raw: aiJson,
+      });
+    }
+
+    // Save to Supabase
     const { data, error } = await supabaseAdmin
       .from("summaries")
       .insert([
@@ -173,25 +177,20 @@ Output only the Markdown summary. Do not add headers like "Summary:" or any prea
           user_id: userId,
           job_title: jobTitle,
           job_description: jobDescription,
-          hm_notes: hmNotes ?? null,
-          recruiter_notes: recruiterNotes ?? null,
+          hm_notes: hmNotes || null,
+          recruiter_notes: recruiterNotes || null,
           summary_markdown: summaryMarkdown,
         },
       ])
       .select("id")
       .single();
 
-    if (error) {
-      return json(res, 500, { error: `Supabase insert error: ${error.message}` });
-    }
+    if (error) return send(res, 500, { error: `Supabase insert error: ${error.message}` });
 
-    return json(res, 200, { id: data.id });
+    return send(res, 200, { id: data.id });
   } catch (e: any) {
-    const msg =
-      e?.name === "AbortError"
-        ? "OpenAI request timed out"
-        : e?.message || "Server error";
+    const msg = e?.name === "AbortError" ? "OpenAI request timed out" : e?.message || "Server error";
     console.error("generate-summary error:", e);
-    return json(res, 500, { error: msg });
+    return send(res, 500, { error: msg });
   }
 }
