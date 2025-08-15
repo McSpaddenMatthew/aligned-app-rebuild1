@@ -7,63 +7,77 @@ import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { Inter } from "next/font/google";
 
-// Premium font (no CSS edits needed)
 const inter = Inter({ subsets: ["latin"], display: "swap", variable: "--font-inter" });
 
-// —— Types ——————————————————————————————————————————
-type CaseRecord = {
-  id: string;
-  title: string | null;
-  created_at: string | null;
-  summary_markdown: string | null; // your generated candidate summary (Markdown)
-};
+type AnyRow = Record<string, any>;
 
-// —— Helpers ——————————————————————————————————————————
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL as string,
   process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY as string
 );
 
-function formatDate(iso: string | null | undefined) {
+function formatDate(iso?: string | null) {
   if (!iso) return "";
   try {
-    const d = new Date(iso);
-    return new Intl.DateTimeFormat(undefined, {
-      dateStyle: "medium",
-      timeStyle: "short",
-    }).format(d);
+    return new Intl.DateTimeFormat(undefined, { dateStyle: "medium", timeStyle: "short" })
+      .format(new Date(iso));
   } catch {
-    return iso ?? "";
+    return iso || "";
   }
 }
 
-// —— Page ————————————————————————————————————————————
+function getTitle(row: AnyRow, fallbackId: string) {
+  return (
+    row.title ||
+    row.name ||
+    row.case_name ||
+    row.label ||
+    `Case ${fallbackId}`
+  );
+}
+
+function getCreatedAt(row: AnyRow) {
+  return row.created_at || row.createdAt || row.inserted_at || row.created || null;
+}
+
+function getMarkdown(row: AnyRow) {
+  return (
+    row.summary_markdown ||
+    row.summary ||
+    row.generated_markdown ||
+    row.report ||
+    row.output ||
+    row.content ||
+    ""
+  );
+}
+
 export default function CaseDetailPage() {
   const router = useRouter();
-  const { id } = router.query;
+  const { id } = router.query as { id?: string };
 
-  const [data, setData] = useState<CaseRecord | null>(null);
+  const [row, setRow] = useState<AnyRow | null>(null);
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!id || typeof id !== "string") return;
-
+    if (!id) return;
     let cancelled = false;
+
     (async () => {
       try {
         setLoading(true);
         setErr(null);
 
-        // Adjust the table/column names if yours differ.
-        const { data: row, error } = await supabase
+        // Select everything to avoid missing-column errors
+        const { data, error } = await supabase
           .from("cases")
-          .select("id,title,created_at,summary_markdown")
+          .select("*")
           .eq("id", id)
           .single();
 
         if (error) throw error;
-        if (!cancelled) setData(row as CaseRecord);
+        if (!cancelled) setRow(data as AnyRow);
       } catch (e: any) {
         if (!cancelled) setErr(e?.message ?? "Failed to load");
       } finally {
@@ -76,15 +90,12 @@ export default function CaseDetailPage() {
     };
   }, [id]);
 
-  const pageTitle = useMemo(
-    () => (data?.title ? `${data.title} – Candidate Summary` : "Candidate Summary"),
-    [data?.title]
-  );
+  const pageTitle = useMemo(() => getTitle(row || {}, id || ""), [row, id]);
 
   return (
     <>
       <Head>
-        <title>{pageTitle}</title>
+        <title>{row ? `${pageTitle} – Candidate Summary` : "Candidate Summary"}</title>
         <meta name="viewport" content="width=device-width, initial-scale=1" />
       </Head>
 
@@ -117,18 +128,15 @@ export default function CaseDetailPage() {
             </div>
           )}
 
-          {!loading && data && (
+          {!loading && row && (
             <article className="rounded-2xl border border-neutral-200 bg-white p-8 shadow-sm">
               <div className="mb-6">
                 <h1 className="text-2xl font-semibold tracking-tight text-neutral-900">
-                  {data.title || "Untitled Case"}
+                  {getTitle(row, id || "")}
                 </h1>
-                <p className="mt-1 text-sm text-neutral-500">
-                  {formatDate(data.created_at)}
-                </p>
+                <p className="mt-1 text-sm text-neutral-500">{formatDate(getCreatedAt(row))}</p>
               </div>
 
-              {/* Markdown content */}
               <div
                 className={`
                   prose prose-neutral max-w-none
@@ -139,7 +147,7 @@ export default function CaseDetailPage() {
                 style={{ fontFamily: "var(--font-inter), ui-sans-serif, system-ui" }}
               >
                 <ReactMarkdown remarkPlugins={[remarkGfm]}>
-                  {data.summary_markdown || "_No summary available._"}
+                  {getMarkdown(row) || "_No summary available._"}
                 </ReactMarkdown>
               </div>
             </article>
