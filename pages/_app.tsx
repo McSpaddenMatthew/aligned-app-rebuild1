@@ -1,13 +1,12 @@
-import type { AppProps } from 'next/app';
-import { Analytics } from '@vercel/analytics/react';
-import '../styles/globals.css';          // <-- this loads Tailwind
-import Layout from '../components/Layout';
+import type { AppProps } from "next/app";
+import NavBar from "../components/NavBar";
+import "../styles/globals.css"; // keep/remove if you have it
 
-export default function App({ Component, pageProps }: AppProps) {
+export default function MyApp({ Component, pageProps }: AppProps) {
   return (
-    <Layout>
+    <>
+      <NavBar />
       <Component {...pageProps} />
-      <Analytics />
-    </Layout>
+    </>
   );
 }

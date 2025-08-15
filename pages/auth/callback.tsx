@@ -11,12 +11,10 @@ export default function Callback() {
   const router = useRouter();
 
   useEffect(() => {
-    // react to auth state change
     const { data: sub } = supabase.auth.onAuthStateChange((_e, session) => {
       if (session) router.replace("/"); // or "/dashboard"
     });
 
-    // immediate check (handles already-established session)
     supabase.auth.getSession().then(({ data: { session } }) => {
       if (session) router.replace("/");
     });
