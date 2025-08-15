@@ -69,15 +69,37 @@ export default function CaseDetailPage() {
         setLoading(true);
         setErr(null);
 
-        // Select everything to avoid missing-column errors
-        const { data, error } = await supabase
+        // Try to get by "id"
+        let { data, error } = await supabase
           .from("cases")
           .select("*")
           .eq("id", id)
-          .single();
+          .order("created_at", { ascending: false })
+          .limit(1);
+
+        // Try alternate ID columns if nothing found
+        if ((!data || data.length === 0) && !error) {
+          const altCols = ["public_id", "case_id", "uuid", "slug"];
+          for (const col of altCols) {
+            const alt = await supabase
+              .from("cases")
+              .select("*")
+              .eq(col, id)
+              .order("created_at", { ascending: false })
+              .limit(1);
+            if (alt.data && alt.data.length > 0) {
+              data = alt.data;
+              error = null;
+              break;
+            }
+          }
+        }
 
         if (error) throw error;
-        if (!cancelled) setRow(data as AnyRow);
+        const foundRow = (data && data[0]) ? data[0] : null;
+        if (!foundRow) throw new Error("No case found for this ID.");
+
+        if (!cancelled) setRow(foundRow as AnyRow);
       } catch (e: any) {
         if (!cancelled) setErr(e?.message ?? "Failed to load");
       } finally {
