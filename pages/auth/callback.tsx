@@ -11,12 +11,14 @@ export default function Callback() {
   const router = useRouter();
 
   useEffect(() => {
+    // If we get a session, go to the dashboard
     const { data: sub } = supabase.auth.onAuthStateChange((_e, session) => {
-      if (session) router.replace("/"); // or "/dashboard"
+      if (session) router.replace("/dashboard");
     });
 
+    // Also check immediately in case the session already exists
     supabase.auth.getSession().then(({ data: { session } }) => {
-      if (session) router.replace("/");
+      if (session) router.replace("/dashboard");
     });
 
     return () => sub.subscription.unsubscribe();
