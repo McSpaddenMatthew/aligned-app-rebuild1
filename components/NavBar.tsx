@@ -30,13 +30,27 @@ export default function NavBar() {
   }
 
   return (
-    <nav style={{ display: "flex", gap: 16, padding: 16 }}>
-      <Link href="/">Aligned</Link>
+    <nav style={{ display: "flex", gap: 16, padding: 16, alignItems: "center" }}>
+      <Link href="/" style={{ fontWeight: 600 }}>Aligned</Link>
+
+      {/* optional marketing links */}
+      <div style={{ display: "flex", gap: 12, marginLeft: 16 }}>
+        <Link href="/#why">Why</Link>
+        <Link href="/#how">How it Works</Link>
+        <Link href="/#proof">Proof</Link>
+        <Link href="/#pricing">Pricing</Link>
+      </div>
+
       <div style={{ marginLeft: "auto" }}>
-        {user ? <button onClick={logout}>Log out</button> : <Link href="/login">Log in</Link>}
+        {user ? (
+          <button onClick={logout}>Log out</button>
+        ) : (
+          <Link href="/login">Log in</Link>
+        )}
       </div>
     </nav>
   );
 }
+
 
 
