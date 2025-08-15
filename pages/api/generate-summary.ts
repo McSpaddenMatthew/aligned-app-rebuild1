@@ -2,181 +2,103 @@
 import type { NextApiRequest, NextApiResponse } from "next";
 import { createClient } from "@supabase/supabase-js";
 
-// Required env vars (Vercel → Project → Settings → Environment Variables)
-const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-const SUPABASE_ANON = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
-const SUPABASE_SERVICE = process.env.SUPABASE_SERVICE_ROLE_KEY!;
-const OPENAI_API_KEY = process.env.OPENAI_API_KEY!;
+const url = process.env.NEXT_PUBLIC_SUPABASE_URL as string;
 
-// Clamp big pastes so the model doesn't waste output budget
-function clamp(s: unknown, max = 10000) {
-  const t = (typeof s === "string" ? s : s ?? "").toString();
-  return t.length > max ? t.slice(0, max) + "\n\n[...truncated...]" : t;
+// Prefer the server-only service role key if available (bypasses strict RLS for inserts).
+// Fallback to anon if you haven't set a service role key yet.
+const serviceKey =
+  (process.env.SUPABASE_SERVICE_ROLE_KEY as string) ||
+  (process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY as string);
+
+const supabase = createClient(url, serviceKey, {
+  auth: { persistSession: false },
+});
+
+type Data =
+  | { id: string; summary: string; candidate_name?: string | null; role?: string | null }
+  | { error: string };
+
+function extractCandidateName(text: string): string | null {
+  // Try common labels first
+  const label =
+    text.match(/^\s*(?:candidate(?:\s*name)?|name)\s*:\s*(.+)$/im)?.[1] ||
+    text.match(/^\s*hm\s*notes:.*?\b(?:candidate|name)\b\s*:\s*(.+)$/im)?.[1];
+  if (label) return label.trim();
+
+  // Try first heading
+  const h = text.match(/^\s*#{1,3}\s+(.+)$/m)?.[1];
+  if (h) return h.trim();
+
+  // Try "• Jane Doe – " bullets
+  const bullet = text.match(/^[\-\*\u2022]\s+([A-Z][a-z]+(?:\s+[A-Z][a-z]+)+)/m)?.[1];
+  if (bullet) return bullet.trim();
+
+  return null;
 }
 
-// Best-effort text extraction for the Responses API
-function extractText(resp: any): string {
-  if (typeof resp?.output_text === "string" && resp.output_text.trim()) {
-    return resp.output_text.trim();
-  }
-  if (Array.isArray(resp?.output)) {
-    const parts: string[] = [];
-    for (const item of resp.output) {
-      const content = item?.content;
-      if (Array.isArray(content)) {
-        for (const c of content) {
-          if (typeof c?.text === "string") parts.push(c.text);
-          else if (typeof c === "string") parts.push(c);
-          else if (typeof c?.output_text === "string") parts.push(c.output_text);
-        }
-      } else if (typeof item?.output_text === "string") {
-        parts.push(item.output_text);
-      }
-    }
-    const joined = parts.join("\n").trim();
-    if (joined) return joined;
-  }
-  const msg = resp?.choices?.[0]?.message?.content;
-  if (typeof msg === "string" && msg.trim()) return msg.trim();
-  if (Array.isArray(msg)) {
-    const m = msg.map((c: any) => (typeof c === "string" ? c : c?.text || "")).join("");
-    if (m.trim()) return m.trim();
-  }
-  return "";
+function extractRole(text: string): string | null {
+  const role =
+    text.match(/^\s*(?:role|position|title)\s*:\s*(.+)$/im)?.[1] ||
+    text.match(/\bfor\s+the\s+role\s+of\s+(.+?)(?:[,\n]|$)/i)?.[1];
+  return role ? role.trim() : null;
 }
 
-function send(res: NextApiResponse, code: number, payload: any) {
-  res.status(code).json(payload);
-}
-
-export default async function handler(req: NextApiRequest, res: NextApiResponse) {
-  if (req.method !== "POST") return send(res, 405, { error: "Method not allowed" });
-  if (!SUPABASE_URL || !SUPABASE_ANON || !SUPABASE_SERVICE) {
-    return send(res, 500, { error: "Supabase environment variables are missing" });
+export default async function handler(req: NextApiRequest, res: NextApiResponse<Data>) {
+  if (req.method !== "POST") {
+    res.status(405).json({ error: "Method not allowed" });
+    return;
   }
-  if (!OPENAI_API_KEY) return send(res, 500, { error: "OPENAI_API_KEY is not set" });
-
-  const supabaseUser = createClient(SUPABASE_URL, SUPABASE_ANON, {
-    auth: { persistSession: false, detectSessionInUrl: false },
-    global: { headers: { Authorization: req.headers.authorization || "" } },
-  });
-  const supabaseAdmin = createClient(SUPABASE_URL, SUPABASE_SERVICE, {
-    auth: { persistSession: false, detectSessionInUrl: false },
-  });
 
   try {
-    const body = (req.body || {}) as {
-      jobTitle?: string;
-      jobDescription?: string;
-      hmNotes?: string;
-      recruiterNotes?: string;
+    const { input, candidateName, role } = (req.body || {}) as {
+      input?: string;
+      candidateName?: string;
+      role?: string;
     };
 
-    const jobTitle = clamp(body.jobTitle, 200);
-    const jobDescription = clamp(body.jobDescription, 12000);
-    const hmNotes = clamp(body.hmNotes, 8000);
-    const recruiterNotes = clamp(body.recruiterNotes, 4000);
-
-    if (!jobTitle || !jobDescription) {
-      return send(res, 400, { error: "Missing jobTitle or jobDescription" });
+    const summary = (input || "").trim();
+    if (!summary) {
+      res.status(400).json({ error: "Missing 'input' text." });
+      return;
     }
 
-    // Resolve caller (non-fatal if missing)
-    let userId: string | null = null;
-    try {
-      const { data } = await supabaseUser.auth.getUser();
-      if (data?.user) userId = data.user.id;
-    } catch {}
+    // Heuristics (client-provided values win; otherwise infer)
+    const inferredName = candidateName?.trim() || extractCandidateName(summary);
+    const inferredRole = role?.trim() || extractRole(summary);
 
-    // Tight prompt; asks for Markdown only
-    const prompt = `
-You are Aligned, the trust layer between recruiters and hiring managers.
+    // Save into public.cases
+    // Ensure cases has columns: id (uuid default), candidate_name (text), role (text, nullable), summary_markdown (text), created_at (timestamptz default)
+    const payload = {
+      candidate_name: inferredName || null,
+      role: inferredRole || null,
+      summary_markdown: summary,
+    };
 
-Write a concise **Markdown** summary **<= 600 words** with EXACTLY these sections:
-
-1) What You Shared – What the Candidate/Market Brings
-   - 4–7 bullets mapping role needs to candidate strengths (infer needs from JD/HM notes).
-
-2) Why This Role Is Hard / Market Reality
-   - 3–5 bullets.
-
-3) Known Risks & Mitigations
-   - Two-column table with 3–6 rows (Risk | Mitigation).
-
-4) Outcomes to Prioritize in Screens
-   - 4–6 measurable bullets.
-
-5) Interview Focus Guide
-   - 5–8 bullets with pointed probing questions tied to the JD.
-
-Do NOT include any preamble or headings like "Summary:". Output Markdown only.
-
-Job Title:
-${jobTitle}
-
-Job Description / Requirements:
-${jobDescription}
-
-HM Notes:
-${hmNotes || "(none provided)"}
-
-Recruiter Notes:
-${recruiterNotes || "(none provided)"}  
-`.trim();
-
-    // OpenAI Responses API using a non-reasoning model
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 45_000);
-
-    const aiRes = await fetch("https://api.openai.com/v1/responses", {
-      method: "POST",
-      signal: controller.signal,
-      headers: {
-        Authorization: `Bearer ${OPENAI_API_KEY}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        model: "gpt-4o-mini",   // <— non-reasoning, reliably returns text
-        input: prompt,
-        max_output_tokens: 1200,
-      }),
-    });
-
-    clearTimeout(timeout);
-
-    if (!aiRes.ok) {
-      const errTxt = await aiRes.text();
-      return send(res, 502, { error: `OpenAI error: ${errTxt.slice(0, 900)}` });
-    }
-
-    const aiJson = await aiRes.json();
-    const summaryMarkdown = extractText(aiJson);
-    if (!summaryMarkdown) {
-      return send(res, 502, { error: "OpenAI response had no text.", raw: aiJson });
-    }
-
-    // Save to public.summaries
-    const { data, error } = await supabaseAdmin
-      .from("summaries")
-      .insert([
-        {
-          user_id: userId,
-          job_title: jobTitle,
-          job_description: jobDescription,
-          hm_notes: hmNotes || null,
-          recruiter_notes: recruiterNotes || null,
-          summary_markdown: summaryMarkdown,
-        },
-      ])
+    const { data, error } = await supabase
+      .from("cases")
+      .insert([payload])
       .select("id")
-      .single();
+      .limit(1);
 
-    if (error) return send(res, 500, { error: `Supabase insert error: ${error.message}` });
+    if (error) {
+      // Helpful error passthrough for RLS issues
+      res.status(500).json({ error: `Insert failed: ${error.message}` });
+      return;
+    }
 
-    return send(res, 200, { id: data.id });
+    const id = data?.[0]?.id as string | undefined;
+    if (!id) {
+      res.status(500).json({ error: "Saved but no id returned." });
+      return;
+    }
+
+    res.status(200).json({
+      id,
+      summary, // echo back for optional client preview
+      candidate_name: inferredName || null,
+      role: inferredRole || null,
+    });
   } catch (e: any) {
-    const msg = e?.name === "AbortError" ? "OpenAI request timed out" : e?.message || "Server error";
-    console.error("generate-summary error:", e);
-    return send(res, 500, { error: msg });
+    res.status(500).json({ error: e?.message || "Unexpected error" });
   }
 }
