@@ -1,12 +1,13 @@
+// pages/api/generate-summary.ts
 import type { NextApiRequest, NextApiResponse } from "next";
 import { createClient } from "@supabase/supabase-js";
 
 /**
- * Required env vars (set in Vercel → Project → Settings → Environment Variables → Production):
+ * Required env vars (Vercel → Project → Settings → Environment Variables → Production):
  * - NEXT_PUBLIC_SUPABASE_URL
  * - NEXT_PUBLIC_SUPABASE_ANON_KEY
- * - SUPABASE_SERVICE_ROLE_KEY   (red service_role key from Supabase — server only)
- * - OPENAI_API_KEY              (sk-... from OpenAI)
+ * - SUPABASE_SERVICE_ROLE_KEY   (red service_role key from Supabase — server only, never expose client-side)
+ * - OPENAI_API_KEY              (sk-...)
  */
 
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL!;
@@ -17,13 +18,13 @@ const OPENAI_API_KEY = process.env.OPENAI_API_KEY!;
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== "POST") return res.status(405).json({ error: "Method not allowed" });
 
-  // Optional: client for reading the user from a bearer token
+  // Optional user-aware client (reads bearer token to attach user_id)
   const supabaseUser = createClient(SUPABASE_URL, SUPABASE_ANON, {
     auth: { persistSession: false, detectSessionInUrl: false },
     global: { headers: { Authorization: req.headers.authorization || "" } },
   });
 
-  // Admin client for DB writes (bypasses RLS) — never expose this key in browser code
+  // Admin client (bypasses RLS) for writes
   const supabaseAdmin = createClient(SUPABASE_URL, SUPABASE_SERVICE, {
     auth: { persistSession: false, detectSessionInUrl: false },
   });
@@ -43,20 +44,22 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       return res.status(500).json({ error: "OPENAI_API_KEY not set" });
     }
 
-    // Try to attach user_id if a token is provided
+    // Try to bind row to the calling user (if a token is present)
     let userId: string | null = null;
     try {
       const { data, error } = await supabaseUser.auth.getUser();
       if (!error && data?.user) userId = data.user.id;
-    } catch { /* ignore */ }
+    } catch {
+      // ignore — it's fine to insert without user_id
+    }
 
-    // --- Call OpenAI Responses API ---
+    // ---------- Build prompt ----------
     const prompt = `
 You are Aligned, the trust layer between recruiters and hiring managers.
 Create a concise, structured hiring-manager–ready report.
 
 Use this exact section order and tone:
-1) What You Shared – What the Candidate/Market Brings (bullet comparison)
+1) What You Shared – What the Candidate/Market Brings (bullet comparison, infer key needs from JD/HM notes)
 2) Why This Role Is Hard / Market Reality (1–3 bullets)
 3) Known Risks & Mitigations (table: Risk | Mitigation)
 4) Outcomes to Prioritize in Screens (bullets, measurable)
@@ -73,8 +76,9 @@ ${hmNotes || "(none provided)"}
 Recruiter Notes:
 ${recruiterNotes || "(none provided)"}
 
-Keep it crisp. No fluff.`;
+Keep it crisp. No fluff.`.trim();
 
+    // ---------- OpenAI (Responses API) ----------
     const aiRes = await fetch("https://api.openai.com/v1/responses", {
       method: "POST",
       headers: {
@@ -82,42 +86,46 @@ Keep it crisp. No fluff.`;
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        model: "gpt-5.1-mini",
+        model: "gpt-5",
         input: prompt,
-        temperature: 0.2,
+        // NOTE: Do not pass temperature; this model rejects it in Responses API.
       }),
     });
 
     if (!aiRes.ok) {
       const txt = await aiRes.text();
-      return res.status(502).json({ error: `OpenAI error: ${txt.slice(0, 500)}` });
+      return res.status(502).json({ error: `OpenAI error: ${txt.slice(0, 800)}` });
     }
 
     const aiJson = await aiRes.json();
-    const summaryMarkdown =
-      aiJson.output_text ??
-      aiJson.choices?.[0]?.message?.content ??
+    const summaryMarkdown: string =
+      aiJson?.output_text ??
+      aiJson?.choices?.[0]?.message?.content ??
       "[No output]";
 
-    // --- Insert with service role (bypasses RLS) ---
+    // ---------- Save to Supabase (bypass RLS with service role) ----------
     const { data, error } = await supabaseAdmin
       .from("summaries")
-      .insert([{
-        user_id: userId,
-        job_title: jobTitle,
-        job_description: jobDescription,
-        hm_notes: hmNotes ?? null,
-        recruiter_notes: recruiterNotes ?? null,
-        summary_markdown: summaryMarkdown,
-      }])
+      .insert([
+        {
+          user_id: userId,
+          job_title: jobTitle,
+          job_description: jobDescription,
+          hm_notes: hmNotes ?? null,
+          recruiter_notes: recruiterNotes ?? null,
+          summary_markdown: summaryMarkdown,
+        },
+      ])
       .select("id")
       .single();
 
-    if (error) return res.status(500).json({ error: error.message });
+    if (error) {
+      return res.status(500).json({ error: `Supabase insert error: ${error.message}` });
+    }
 
     return res.status(200).json({ id: data.id });
   } catch (e: any) {
     console.error("generate-summary error:", e);
-    return res.status(500).json({ error: e.message || "Server error" });
+    return res.status(500).json({ error: e?.message || "Server error" });
   }
 }
