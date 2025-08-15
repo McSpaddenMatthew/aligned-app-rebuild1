@@ -17,6 +17,7 @@ export default function Dashboard() {
   const router = useRouter();
   const [loading, setLoading] = useState(true);
   const [sessionOk, setSessionOk] = useState(false);
+
   const [jobTitle, setJobTitle] = useState("");
   const [jobDescription, setJobDescription] = useState("");
   const [hmNotes, setHmNotes] = useState("");
@@ -42,9 +43,11 @@ export default function Dashboard() {
       .select("id, job_title, created_at")
       .order("created_at", { ascending: false })
       .limit(10);
+
     if (!error && data) setSummaries(data as Summary[]);
   }
 
+  // <-- THIS is the function we care about
   async function handleGenerate(e: React.FormEvent) {
     e.preventDefault();
     if (!jobTitle || !jobDescription) {
@@ -53,9 +56,16 @@ export default function Dashboard() {
     }
     setGenerating(true);
     try {
+      // Include the Supabase token so API can attach user_id
+      const { data: { session } } = await supabase.auth.getSession();
+      const token = session?.access_token || "";
+
       const res = await fetch("/api/generate-summary", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: token ? `Bearer ${token}` : "",
+        },
         body: JSON.stringify({
           jobTitle,
           jobDescription,
@@ -63,20 +73,27 @@ export default function Dashboard() {
           recruiterNotes,
         }),
       });
-      if (!res.ok) throw new Error("Failed to generate");
-      const { id } = await res.json();
-      // Refresh list and open the new record
+
+      // Surface REAL server error details
+      let payload: any = {};
+      try { payload = await res.json(); } catch {}
+      if (!res.ok) {
+        const msg = payload?.error || `HTTP ${res.status}`;
+        throw new Error(msg);
+      }
+
+      const { id } = payload;
       await loadSummaries();
       router.push(`/cases/${id}`);
     } catch (err: any) {
-      alert(err.message || "Error generating summary");
+      console.error("Generate error:", err);
+      alert(err?.message || "Failed to generate");
     } finally {
       setGenerating(false);
     }
   }
 
-  if (loading) return null;
-  if (!sessionOk) return null;
+  if (loading || !sessionOk) return null;
 
   return (
     <main style={{maxWidth:1000, margin:"24px auto", padding:"0 16px", fontFamily:"ui-sans-serif,system-ui"}}>
@@ -158,5 +175,3 @@ export default function Dashboard() {
     </main>
   );
 }
-
-
