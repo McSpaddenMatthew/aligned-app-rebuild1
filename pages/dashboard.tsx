@@ -1,177 +1,125 @@
+// pages/dashboard.tsx
+import Head from "next/head";
+import Link from "next/link";
 import { useEffect, useState } from "react";
-import { useRouter } from "next/router";
 import { createClient } from "@supabase/supabase-js";
+import { Inter } from "next/font/google";
+
+const inter = Inter({ subsets: ["latin"], display: "swap", variable: "--font-inter" });
+
+type AnyRow = Record<string, any>;
 
 const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+  process.env.NEXT_PUBLIC_SUPABASE_URL as string,
+  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY as string
 );
 
-type Summary = {
-  id: string;
-  job_title: string | null;
-  created_at: string;
-};
+function getTitle(row: AnyRow) {
+  return row.title || row.name || row.case_name || row.label || row.candidate_name || "Untitled Case";
+}
+function getWhen(row: AnyRow) {
+  const v = row.created_at || row.createdAt || row.inserted_at || row.created || null;
+  if (!v) return "";
+  try {
+    return new Intl.DateTimeFormat(undefined, { dateStyle: "medium", timeStyle: "short" })
+      .format(new Date(v));
+  } catch { return String(v); }
+}
 
 export default function Dashboard() {
-  const router = useRouter();
+  const [rows, setRows] = useState<AnyRow[]>([]);
   const [loading, setLoading] = useState(true);
-  const [sessionOk, setSessionOk] = useState(false);
-
-  const [jobTitle, setJobTitle] = useState("");
-  const [jobDescription, setJobDescription] = useState("");
-  const [hmNotes, setHmNotes] = useState("");
-  const [recruiterNotes, setRecruiterNotes] = useState("");
-  const [generating, setGenerating] = useState(false);
-  const [summaries, setSummaries] = useState<Summary[]>([]);
+  const [err, setErr] = useState<string | null>(null);
 
   useEffect(() => {
-    supabase.auth.getSession().then(async ({ data: { session } }) => {
-      if (!session) {
-        router.replace("/");
-        return;
+    let cancelled = false;
+    (async () => {
+      try {
+        setLoading(true);
+        setErr(null);
+
+        // Prefer ordering by created_at if present; fall back to plain select.
+        let data: AnyRow[] | null = null;
+        try {
+          const r = await supabase.from("cases").select("*").order("created_at", { ascending: false });
+          if (r.error) throw r.error;
+          data = r.data;
+        } catch {
+          const r2 = await supabase.from("cases").select("*");
+          if (r2.error) throw r2.error;
+          data = r2.data;
+        }
+
+        const cleaned = (data || []).filter((r) => !!r.id); // require primary key `id`
+        if (!cancelled) setRows(cleaned);
+      } catch (e: any) {
+        if (!cancelled) setErr(e?.message ?? "Failed to load cases");
+      } finally {
+        if (!cancelled) setLoading(false);
       }
-      setSessionOk(true);
-      setLoading(false);
-      await loadSummaries();
-    });
-  }, [router]);
-
-  async function loadSummaries() {
-    const { data, error } = await supabase
-      .from("summaries")
-      .select("id, job_title, created_at")
-      .order("created_at", { ascending: false })
-      .limit(10);
-
-    if (!error && data) setSummaries(data as Summary[]);
-  }
-
-  // <-- THIS is the function we care about
-  async function handleGenerate(e: React.FormEvent) {
-    e.preventDefault();
-    if (!jobTitle || !jobDescription) {
-      alert("Please include at least Job Title and Job Description.");
-      return;
-    }
-    setGenerating(true);
-    try {
-      // Include the Supabase token so API can attach user_id
-      const { data: { session } } = await supabase.auth.getSession();
-      const token = session?.access_token || "";
-
-      const res = await fetch("/api/generate-summary", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: token ? `Bearer ${token}` : "",
-        },
-        body: JSON.stringify({
-          jobTitle,
-          jobDescription,
-          hmNotes,
-          recruiterNotes,
-        }),
-      });
-
-      // Surface REAL server error details
-      let payload: any = {};
-      try { payload = await res.json(); } catch {}
-      if (!res.ok) {
-        const msg = payload?.error || `HTTP ${res.status}`;
-        throw new Error(msg);
-      }
-
-      const { id } = payload;
-      await loadSummaries();
-      router.push(`/cases/${id}`);
-    } catch (err: any) {
-      console.error("Generate error:", err);
-      alert(err?.message || "Failed to generate");
-    } finally {
-      setGenerating(false);
-    }
-  }
-
-  if (loading || !sessionOk) return null;
+    })();
+    return () => { cancelled = true; };
+  }, []);
 
   return (
-    <main style={{maxWidth:1000, margin:"24px auto", padding:"0 16px", fontFamily:"ui-sans-serif,system-ui"}}>
-      <header style={{display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:16}}>
-        <h1 style={{margin:0}}>Recruiter Dashboard</h1>
-        <button
-          onClick={async () => { await supabase.auth.signOut(); window.location.href = "/"; }}
-          style={{padding:"8px 12px", borderRadius:10, border:"1px solid #e5e7eb", background:"white", cursor:"pointer"}}
-        >
-          Log out
-        </button>
-      </header>
+    <>
+      <Head>
+        <title>Aligned – Dashboard</title>
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+      </Head>
 
-      <section style={{display:"grid", gap:12, border:"1px solid #e5e7eb", borderRadius:16, padding:16, marginBottom:24}}>
-        <h2 style={{margin:"0 0 8px"}}>Create a Hiring Manager–Ready Report</h2>
-        <form onSubmit={handleGenerate} style={{display:"grid", gap:12}}>
-          <div>
-            <label style={{display:"block", fontWeight:600}}>Job Title</label>
-            <input
-              value={jobTitle}
-              onChange={(e)=>setJobTitle(e.target.value)}
-              placeholder="Senior Director of Data Strategy"
-              style={{width:"100%", padding:"10px 12px", borderRadius:10, border:"1px solid #e5e7eb"}}
-            />
+      <div className={`${inter.variable} min-h-screen bg-neutral-50`}>
+        <header className="border-b bg-white">
+          <div className="mx-auto max-w-5xl px-6 py-4 flex items-center justify-between">
+            <div className="text-xl font-semibold tracking-tight">Aligned</div>
+            <div className="text-sm text-neutral-500">Dashboard</div>
           </div>
-          <div>
-            <label style={{display:"block", fontWeight:600}}>Job Description / Requirements</label>
-            <textarea
-              value={jobDescription}
-              onChange={(e)=>setJobDescription(e.target.value)}
-              rows={6}
-              placeholder="Paste the JD or key requirements here…"
-              style={{width:"100%", padding:"10px 12px", borderRadius:10, border:"1px solid #e5e7eb"}}
-            />
-          </div>
-          <div>
-            <label style={{display:"block", fontWeight:600}}>HM Conversation Notes (optional)</label>
-            <textarea
-              value={hmNotes}
-              onChange={(e)=>setHmNotes(e.target.value)}
-              rows={4}
-              placeholder="Paste transcript snippets or bullet notes from your HM call…"
-              style={{width:"100%", padding:"10px 12px", borderRadius:10, border:"1px solid #e5e7eb"}}
-            />
-          </div>
-          <div>
-            <label style={{display:"block", fontWeight:600}}>Recruiter Notes (optional)</label>
-            <textarea
-              value={recruiterNotes}
-              onChange={(e)=>setRecruiterNotes(e.target.value)}
-              rows={4}
-              placeholder="Anything else: market context, constraints, nice-to-haves, etc."
-              style={{width:"100%", padding:"10px 12px", borderRadius:10, border:"1px solid #e5e7eb"}}
-            />
-          </div>
-          <button
-            type="submit"
-            disabled={generating}
-            style={{padding:"10px 14px", borderRadius:12, border:"1px solid #111827", background:"#111827", color:"white", cursor:"pointer"}}
-          >
-            {generating ? "Generating…" : "Generate Report"}
-          </button>
-        </form>
-      </section>
+        </header>
 
-      <section style={{border:"1px solid #e5e7eb", borderRadius:16, padding:16}}>
-        <h2 style={{margin:"0 0 8px"}}>Recent Reports</h2>
-        <div style={{display:"grid", gap:8}}>
-          {summaries.length === 0 ? (
-            <p>No reports yet.</p>
-          ) : summaries.map((s) => (
-            <a key={s.id} href={`/cases/${s.id}`} style={{padding:"10px 12px", border:"1px solid #e5e7eb", borderRadius:12, textDecoration:"none"}}>
-              <div style={{fontWeight:600}}>{s.job_title || "Untitled role"}</div>
-              <div style={{fontSize:12, opacity:.7}}>{new Date(s.created_at).toLocaleString()}</div>
-            </a>
-          ))}
-        </div>
-      </section>
-    </main>
+        <main className="mx-auto max-w-3xl px-6 py-8">
+          <h1 className="text-2xl font-semibold tracking-tight text-neutral-900 mb-4">
+            Recent Reports
+          </h1>
+
+          {loading && (
+            <div className="space-y-3">
+              {[...Array(4)].map((_, i) => (
+                <div key={i} className="animate-pulse h-16 rounded-xl border border-neutral-200 bg-white" />
+              ))}
+            </div>
+          )}
+
+          {!loading && err && (
+            <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">
+              {err}
+            </div>
+          )}
+
+          {!loading && !err && rows.length === 0 && (
+            <div className="rounded-xl border border-neutral-200 bg-white p-6 text-sm text-neutral-600">
+              No reports yet.
+            </div>
+          )}
+
+          {!loading && !err && rows.length > 0 && (
+            <ul className="space-y-3">
+              {rows.map((row) => (
+                <li key={row.id}>
+                  <Link
+                    href={`/cases/${row.id}`}
+                    className="block rounded-xl border border-neutral-200 bg-white p-4 hover:border-neutral-300 hover:shadow-sm transition"
+                  >
+                    <div className="flex items-center justify-between">
+                      <div className="font-medium text-neutral-900">{getTitle(row)}</div>
+                      <div className="text-xs text-neutral-500">{getWhen(row)}</div>
+                    </div>
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          )}
+        </main>
+      </div>
+    </>
   );
 }

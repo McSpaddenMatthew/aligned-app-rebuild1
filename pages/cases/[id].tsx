@@ -16,16 +16,15 @@ const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY as string
 );
 
-function formatDate(iso?: string | null) {
+function fmtDate(iso?: string | null) {
   if (!iso) return "";
   try {
     return new Intl.DateTimeFormat(undefined, { dateStyle: "medium", timeStyle: "short" })
       .format(new Date(iso));
   } catch {
-    return iso || "";
+    return String(iso ?? "");
   }
 }
-
 function getTitle(row: AnyRow, fallbackId: string) {
   return row.title || row.name || row.case_name || row.label || `Case ${fallbackId}`;
 }
@@ -61,23 +60,15 @@ export default function CaseDetailPage() {
         setLoading(true);
         setErr(null);
 
-        // Try common ID columns one-by-one so we never reference a missing column.
-        const idCols = ["id", "case_id", "uuid", "slug"]; // add/remove to match your schema
-        let found: AnyRow | null = null;
-        for (const col of idCols) {
-          const { data, error } = await supabase
-            .from("cases")
-            .select("*")
-            .eq(col, id)
-            .limit(1);
+        // Lookup strictly by the primary key `id`
+        const { data, error } = await supabase
+          .from("cases")
+          .select("*")
+          .eq("id", id)
+          .limit(1);
 
-          if (error) continue;             // skip unknown/invalid column
-          if (data && data.length > 0) {   // stop at first hit
-            found = data[0];
-            break;
-          }
-        }
-
+        if (error) throw error;
+        const found = (data && data[0]) || null;
         if (!found) throw new Error("No case found for this ID.");
 
         if (!cancelled) setRow(found);
@@ -135,7 +126,7 @@ export default function CaseDetailPage() {
                 <h1 className="text-2xl font-semibold tracking-tight text-neutral-900">
                   {getTitle(row, id || "")}
                 </h1>
-                <p className="mt-1 text-sm text-neutral-500">{formatDate(getCreatedAt(row))}</p>
+                <p className="mt-1 text-sm text-neutral-500">{fmtDate(getCreatedAt(row))}</p>
               </div>
 
               <div
@@ -158,4 +149,3 @@ export default function CaseDetailPage() {
     </>
   );
 }
-
