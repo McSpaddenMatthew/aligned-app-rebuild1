@@ -113,7 +113,7 @@ Write only the summary, no preamble.`.trim();
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        model: "gpt-5.1",        // <-- you're on 5.1; change to "gpt-5" later if you prefer
+        model: "gpt-5.1-mini",        // <-- you're on 5.1; change to "gpt-5" later if you prefer
         input: prompt,
         max_output_tokens: 900,
       }),
