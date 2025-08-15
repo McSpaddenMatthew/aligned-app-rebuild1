@@ -1,12 +1,14 @@
+// pages/login.tsx
 import Head from "next/head";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/router";
-import { supabase } from "../lib/supabaseClient";
+import { createClient } from "@supabase/supabase-js";
 
-const SUPA_READY =
-  !!process.env.NEXT_PUBLIC_SUPABASE_URL &&
-  !!process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY &&
-  !!supabase;
+// Self-contained Supabase browser client (no local lib required)
+const supabase = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+);
 
 export default function Login() {
   const router = useRouter();
@@ -14,82 +16,80 @@ export default function Login() {
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
 
-  async function sendLink(e: React.FormEvent) {
+  // If already logged in, bounce away
+  useEffect(() => {
+    const { data: sub } = supabase.auth.onAuthStateChange((_e, session) => {
+      if (session) router.replace("/"); // or "/dashboard"
+    });
+
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (session) router.replace("/");
+    });
+
+    return () => sub.subscription.unsubscribe();
+  }, [router]);
+
+  async function sendLink(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
-    setMsg(null);
     if (!email.trim()) return setMsg("Enter your email.");
 
-    try {
-      setBusy(true);
-      if (SUPA_READY && supabase) {
-        const { error } = await supabase.auth.signInWithOtp({
-          email: email.trim(),
-          options: { emailRedirectTo: `${window.location.origin}/dashboard` },
-        });
-        if (error) throw error;
-        setMsg("Check your inbox for the magic link.");
-      } else {
-        setMsg("Supabase not configured. Use Dev Login below.");
-      }
-    } catch (err: any) {
-      setMsg(err?.message || "Something went wrong.");
-    } finally {
-      setBusy(false);
-    }
-  }
+    setBusy(true);
+    setMsg(null);
 
-  function devLogin() {
-    localStorage.setItem("aligned-dev-auth", "1");
-    router.push("/dashboard");
+    const { error } = await supabase.auth.signInWithOtp({
+      email,
+      options: { emailRedirectTo: `${window.location.origin}/auth/callback` },
+    });
+
+    setBusy(false);
+    if (error) setMsg(error.message);
+    else setMsg("Check your email for the login link.");
   }
 
   return (
     <>
       <Head>
-        <title>Log in — Aligned</title>
+        <title>Login | Aligned</title>
       </Head>
-      <main className="section-pad">
-        <div className="container-tight">
-          <div className="mx-auto max-w-md card">
-            <h1 className="h2">Log in</h1>
-            <p className="mt-2 text-gray-600">
-              We use passwordless login. Enter your email to get a magic link.
-            </p>
 
-            <form onSubmit={sendLink} className="mt-6 space-y-4">
-              <input
-                type="email"
-                placeholder="you@company.com"
-                className="w-full rounded-xl border border-gray-200 px-4 py-3 outline-none focus:ring-2 focus:ring-brand-500"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-              />
-              <button disabled={busy} className="btn btn-primary w-full">
-                {busy ? "Sending…" : "Send magic link"}
-              </button>
-            </form>
+      <main style={{ maxWidth: 440, margin: "64px auto", padding: 24 }}>
+        <h1 style={{ marginBottom: 12 }}>Log in</h1>
 
-            {msg && (
-              <div className="mt-4 rounded-xl border border-gray-200 bg-gray-50 p-3 text-sm">
-                {msg}
-              </div>
-            )}
+        <form onSubmit={sendLink}>
+          <label htmlFor="email">Email</label>
+          <input
+            id="email"
+            type="email"
+            required
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            style={{
+              width: "100%",
+              padding: "10px 12px",
+              marginTop: 8,
+              marginBottom: 12,
+              borderRadius: 8,
+              border: "1px solid #ddd",
+            }}
+          />
+          <button
+            type="submit"
+            disabled={busy}
+            style={{
+              width: "100%",
+              padding: "10px 12px",
+              borderRadius: 8,
+              border: 0,
+              cursor: "pointer",
+            }}
+          >
+            {busy ? "Sending…" : "Send magic link"}
+          </button>
+        </form>
 
-            {!SUPA_READY && (
-              <div className="mt-6">
-                <button onClick={devLogin} className="btn btn-ghost w-full">
-                  Continue (Dev Login)
-                </button>
-                <p className="mt-2 text-xs text-gray-500">
-                  Dev mode stores a flag in localStorage and skips email.
-                </p>
-              </div>
-            )}
-          </div>
-        </div>
+        {msg && <p style={{ marginTop: 12 }}>{msg}</p>}
       </main>
     </>
   );
 }
-
 
