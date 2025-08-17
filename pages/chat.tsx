@@ -73,12 +73,6 @@ export default function Chat() {
     ];
     let html = md;
     r.forEach(([re, t]) => (html = html.replace(re, t)));
-    // extremely light table support (good enough for our two-column table)
-    html = html
-      .replace(/\| *([^|\n]+) *\|/g, "<td>$1</td>")
-      .replace(/<td>(.*?)<\/td>\s*<td>(.*?)<\/td>/g, "<tr><td>$1</td><td>$2</td></tr>")
-      .replace(/<tr>/, "<table><tbody><tr>")
-      .replace(/<\/tr>$/, "</tr></tbody></table>");
     return html;
   }
 
@@ -97,9 +91,8 @@ export default function Chat() {
     <div style={{ maxWidth: 900, margin: "0 auto", padding: 24, fontFamily: "ui-sans-serif, system-ui" }}>
       <h1>Aligned — Chat</h1>
       <p style={{ color: "#5b6b8a" }}>
-        Paste raw inputs or use labels:<br/>
-        <code>Candidate Name:</code> <code>Candidate Title:</code> <code>Location:</code> <code>Industry Fit:</code><br/>
-        <code>Job Description:</code> <code>Recruiter Notes:</code> <code>HM Transcript:</code> <code>Candidate Resume:</code> <code>Candidate Call Transcript:</code>
+        Paste raw inputs or use labels (Candidate Name, Job Description, Recruiter Notes, HM Transcript, etc.).
+        The reply is the same trust-formatted report as the API.
       </p>
 
       <textarea

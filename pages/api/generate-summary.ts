@@ -3,7 +3,7 @@ import OpenAI from "openai";
 import { z } from "zod";
 
 const apiKey = process.env.OPENAI_API_KEY;
-const model = process.env.OPENAI_MODEL || "gpt-5.1-mini";
+const model = process.env.OPENAI_MODEL || "gpt-4o-mini";
 const openai = new OpenAI({ apiKey });
 
 const InputsSchema = z.object({
@@ -96,7 +96,7 @@ function looksLikeEcho(output: string, inputs: z.infer<typeof InputsSchema>) {
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   try {
     if (req.method !== "POST") return res.status(405).json({ error: "Use POST." });
-    if (!apiKey) return res.status(500).json({ error: "Missing OPENAI_API_KEY in .env.local" });
+    if (!apiKey) return res.status(500).json({ error: "Missing OPENAI_API_KEY in .env / Vercel env" });
 
     const parsed = InputsSchema.safeParse(req.body);
     if (!parsed.success) return res.status(400).json({ error: "Invalid input", details: parsed.error.flatten() });

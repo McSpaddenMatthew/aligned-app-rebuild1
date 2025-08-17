@@ -16,15 +16,8 @@ type Inputs = {
 
 export default function Compose() {
   const [form, setForm] = useState<Inputs>({
-    candidateName: "",
-    candidateTitle: "",
-    location: "",
-    industryFit: "",
-    jobDescription: "",
-    recruiterNotes: "",
-    hmTranscript: "",
-    candidateResume: "",
-    candidateCall: "",
+    candidateName: "", candidateTitle: "", location: "", industryFit: "",
+    jobDescription: "", recruiterNotes: "", hmTranscript: "", candidateResume: "", candidateCall: "",
   });
 
   const [out, setOut] = useState<string>("");
@@ -37,9 +30,7 @@ export default function Compose() {
   }
 
   async function generate() {
-    setLoading(true);
-    setError("");
-    setOut("");
+    setLoading(true); setError(""); setOut("");
     try {
       const res = await fetch("/api/generate-summary", {
         method: "POST",
@@ -50,17 +41,14 @@ export default function Compose() {
       if (!res.ok) throw new Error(json?.error || "Generation failed");
       setOut(json.generated || "");
       setTimeout(() => document.getElementById("preview")?.scrollIntoView({ behavior: "smooth" }), 50);
-    } catch (e: any) {
-      setError(e?.message || "Error");
-    } finally {
-      setLoading(false);
-    }
+    } catch (e: any) { setError(e?.message || "Error"); }
+    finally { setLoading(false); }
   }
 
   async function copyMarkdown() {
     if (!out) return;
     await navigator.clipboard.writeText(out);
-    alert("Trust report copied (Markdown). Paste into your email and edit freely.");
+    alert("Trust report copied (Markdown). Paste into email and edit freely.");
   }
 
   function markdownToHtml(md: string) {
@@ -84,15 +72,15 @@ export default function Compose() {
   async function copyHtml() {
     if (!out) return;
     const html = markdownToHtml(out);
-    if (navigator.clipboard && (window as any).ClipboardItem) {
+    if ((window as any).ClipboardItem) {
       const data = new Blob([html], { type: "text/html" });
       const item = new (window as any).ClipboardItem({ "text/html": data });
       await (navigator.clipboard as any).write([item]);
-      alert("Trust report copied as HTML. Paste into your email composer.");
-      return;
+      alert("Trust report copied as HTML.");
+    } else {
+      await navigator.clipboard.writeText(html);
+      alert("HTML copied to clipboard.");
     }
-    await navigator.clipboard.writeText(html);
-    alert("HTML copied to clipboard.");
   }
 
   const Row = (props: { label: string; k: keyof Inputs; multiline?: boolean }) => (
@@ -103,14 +91,11 @@ export default function Compose() {
           value={(form[props.k] as string) || ""}
           onChange={update(props.k)}
           rows={props.k === "hmTranscript" || props.k === "candidateCall" ? 8 : 5}
-          style={{ width: "100%", padding: 10, borderRadius: 8, border: "1px solid #d0d7e2", fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace" }}
+          style={{ width: "100%", padding: 10, borderRadius: 8, border: "1px solid #d0d7e2", fontFamily: "ui-monospace, Menlo, SFMono-Regular" }}
         />
       ) : (
-        <input
-          value={(form[props.k] as string) || ""}
-          onChange={update(props.k)}
-          style={{ width: "100%", padding: 10, borderRadius: 8, border: "1px solid #d0d7e2" }}
-        />
+        <input value={(form[props.k] as string) || ""} onChange={update(props.k)}
+          style={{ width: "100%", padding: 10, borderRadius: 8, border: "1px solid #d0d7e2" }} />
       )}
     </div>
   );
@@ -119,7 +104,7 @@ export default function Compose() {
     <div style={{ padding: 24, maxWidth: 1200, margin: "0 auto", fontFamily: "ui-sans-serif, system-ui, -apple-system" }}>
       <h1 style={{ marginBottom: 6 }}>Aligned — Compose Trust Report</h1>
       <p style={{ marginTop: 0, color: "#5b6b8a" }}>
-        Paste your JD/notes/transcripts. Click <strong>Generate</strong>, then <strong>Copy Trust Report</strong> and paste into your email.
+        Paste your JD/notes/transcripts. Click <strong>Generate</strong>, then <strong>Copy</strong> and drop into email.
       </p>
 
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
