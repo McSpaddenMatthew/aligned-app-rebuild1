@@ -7,12 +7,14 @@ type Inputs = {
   candidateTitle?: string;
   location?: string;
 
-  candidateCall: string;   // REQUIRED
-  jobDescription: string;  // REQUIRED
-  hmTranscript: string;    // REQUIRED
+  // REQUIRED
+  candidateCall: string;
+  jobDescription: string;
+  hmTranscript: string;
 
+  // OPTIONAL
   candidateResume?: string;
-  roleContext?: string;    // recruiterNotes
+  roleContext?: string; // recruiterNotes
 };
 
 export default function Compose() {
@@ -31,7 +33,7 @@ export default function Compose() {
   const [error, setError] = useState("");
 
   const requiredMissing = useMemo(() => {
-    const miss:string[] = [];
+    const miss: string[] = [];
     if (!form.candidateCall.trim()) miss.push("Candidate Call");
     if (!form.jobDescription.trim()) miss.push("Job Description");
     if (!form.hmTranscript.trim()) miss.push("HM Conversation");
@@ -64,7 +66,7 @@ export default function Compose() {
       const json = await res.json();
       if (!res.ok) throw new Error(json?.error || "Generation failed");
       setOut(json.generated || "");
-    } catch (e:any) {
+    } catch (e: any) {
       setError(e?.message || "Error");
     } finally {
       setLoading(false);
@@ -78,14 +80,16 @@ export default function Compose() {
   }
 
   function mdToHtml(md: string) {
-    const reps:[RegExp,string][] = [
-      [/^###### (.*$)/gim,"<h6>$1</h6>"],[/^##### (.*$)/gim,"<h5>$1</h5>"],
-      [/^#### (.*$)/gim,"<h4>$1</h4>"], [/^### (.*$)/gim,"<h3>$1</h3>"],
-      [/^## (.*$)/gim,"<h2>$1</h2>"],  [/^# (.*$)/gim,"<h1>$1</h1>"],
-      [/\*\*(.*?)\*\*/gim,"<strong>$1</strong>"], [/\*(.*?)\*/gim,"<em>$1</em>"],
-      [/`([^`]+)`/gim,"<code>$1</code>"], [/\n$/gim,"<br/>"],
+    const reps: [RegExp, string][] = [
+      [/^###### (.*$)/gim, "<h6>$1</h6>"], [/^##### (.*$)/gim, "<h5>$1</h5>"],
+      [/^#### (.*$)/gim, "<h4>$1</h4>"],   [/^### (.*$)/gim, "<h3>$1</h3>"],
+      [/^## (.*$)/gim, "<h2>$1</h2>"],    [/^# (.*$)/gim, "<h1>$1</h1>"],
+      [/\*\*(.*?)\*\*/gim, "<strong>$1</strong>"], [/\*(.*?)\*/gim, "<em>$1</em>"],
+      [/`([^`]+)`/gim, "<code>$1</code>"], [/\n$/gim, "<br/>"],
     ];
-    let html = md; reps.forEach(([r,t]) => html = html.replace(r,t)); return html;
+    let html = md;
+    reps.forEach(([r, t]) => (html = html.replace(r, t)));
+    return html;
   }
 
   async function copyHtml() {
@@ -98,28 +102,26 @@ export default function Compose() {
     } else {
       await navigator.clipboard.writeText(html);
     }
-    alert("Copied as HTML.");
+    alert("Copied (HTML).");
   }
 
-  const Row = (p:{label:string;k?:keyof Inputs;required?:boolean;multiline?:boolean;placeholder?:string}) => (
+  const Row = (p: { label: string; k?: keyof Inputs; required?: boolean; multiline?: boolean }) => (
     <div className="row">
-      <label className="lbl">
-        {p.label}{p.required && <span className="req">*</span>}
-      </label>
+      <div className="labelWrap">
+        <label className="label">{p.label}{p.required && <span className="req">*</span>}</label>
+      </div>
       {p.multiline ? (
         <textarea
           value={p.k ? (form[p.k] as string) || "" : ""}
           onChange={p.k ? update(p.k) : undefined}
           rows={8}
-          className="inp mono"
-          placeholder={p.placeholder || ""}
+          className="input mono"
         />
       ) : (
         <input
           value={p.k ? (form[p.k] as string) || "" : ""}
           onChange={p.k ? update(p.k) : undefined}
-          className="inp"
-          placeholder={p.placeholder || ""}
+          className="input"
         />
       )}
     </div>
@@ -127,44 +129,50 @@ export default function Compose() {
 
   return (
     <div className="wrap">
-      <h1 className="h1">Compose Trust Report</h1>
-      <p className="sub">Fill the 3 required fields. Click Generate. Copy into email.</p>
+      <div className="head">
+        <h1>Compose</h1>
+        <div className="actionsTop">
+          <button className="btn primary" onClick={generate} disabled={loading || requiredMissing.length>0}>
+            {loading ? "Generating…" : "Generate"}
+          </button>
+          <button className="btn" onClick={copyMarkdown} disabled={!out}>Copy MD</button>
+          <button className="btn" onClick={copyHtml} disabled={!out}>Copy HTML</button>
+        </div>
+      </div>
 
       <div className="grid">
+        {/* LEFT */}
         <div className="card">
           <div className="tri">
-            <Row label="Candidate Name"   k="candidateName" placeholder="Full name" />
-            <Row label="Candidate Title"  k="candidateTitle" placeholder="Role title" />
-            <Row label="Location"         k="location"       placeholder="City, ST" />
+            <Row label="Candidate Name"  k="candidateName" />
+            <Row label="Candidate Title" k="candidateTitle" />
+            <Row label="Location"        k="location" />
           </div>
 
-          <Row label="Candidate Call" k="candidateCall" required multiline
-               placeholder="Key quotes or takeaways (timestamps OK)" />
-          <Row label="Job Description — must-haves" k="jobDescription" required multiline
-               placeholder="What must this person do? (skills + outcomes)" />
-          <Row label="HM Conversation" k="hmTranscript" required multiline
-               placeholder="What the HM said about needs, risks, 'good'." />
-
-          <Row label="Candidate Resume (optional)" k="candidateResume" multiline placeholder="Paste bullets or summary" />
-          <Row label="Role / Company Intel (optional)" k="roleContext" multiline placeholder="Extra context the recruiter knows" />
+          <Row label="Candidate Call"           k="candidateCall" required multiline />
+          <Row label="Job Description"          k="jobDescription" required multiline />
+          <Row label="HM Conversation"          k="hmTranscript"   required multiline />
+          <Row label="Candidate Resume (opt.)"  k="candidateResume" multiline />
+          <Row label="Role / Company Intel (opt.)" k="roleContext"  multiline />
 
           {requiredMissing.length > 0 && (
             <div className="note warn">Missing: {requiredMissing.join(", ")}</div>
           )}
           {error && <div className="note err">{error}</div>}
 
-          <div className="actions">
+          <div className="actionsBottom">
             <button className="btn primary" onClick={generate} disabled={loading || requiredMissing.length>0}>
               {loading ? "Generating…" : "Generate"}
             </button>
-            <button className="btn" onClick={copyMarkdown} disabled={!out}>Copy (MD)</button>
-            <button className="btn" onClick={copyHtml} disabled={!out}>Copy (HTML)</button>
+            <button className="btn" onClick={copyMarkdown} disabled={!out}>Copy MD</button>
+            <button className="btn" onClick={copyHtml} disabled={!out}>Copy HTML</button>
           </div>
         </div>
 
+        {/* RIGHT */}
         <div className="side">
           <div className="card sticky">
-            <h2 className="h2">Preview</h2>
+            <div className="previewHeader">Preview</div>
             <div className="preview">
               {out ? <ReactMarkdown remarkPlugins={[remarkGfm]}>{out}</ReactMarkdown>
                    : <span className="muted">Report renders here…</span>}
@@ -174,34 +182,35 @@ export default function Compose() {
       </div>
 
       <style jsx>{`
-        :global(html,body){background:#fafbff}
-        .wrap{max-width:1200px;margin:0 auto;padding:24px;font-family:ui-sans-serif,system-ui,-apple-system;color:#0f172a}
-        .h1{margin:0 0 6px;font-size:24px;font-weight:700}
-        .sub{margin:0 0 14px;color:#5b6b8a}
+        :global(html,body){background:#fff}
+        .wrap{max-width:1200px;margin:0 auto;padding:28px 24px;font-family:ui-sans-serif,system-ui,-apple-system;color:#0a0a0a}
+        .head{display:flex;align-items:center;justify-content:space-between;margin-bottom:18px}
+        h1{font-size:26px;font-weight:800;letter-spacing:-0.01em;margin:0}
         .grid{display:grid;grid-template-columns:1fr;gap:16px}
         @media(min-width:1000px){.grid{grid-template-columns:1.05fr .95fr}}
-        .card{background:#fff;border:1px solid #e6ebf3;border-radius:12px;padding:16px}
+        .card{background:#fff;border:1px solid #e6e6e6;border-radius:12px;padding:16px;box-shadow:0 1px 2px rgba(0,0,0,.04)}
         .sticky{position:sticky;top:16px}
         .tri{display:grid;grid-template-columns:1fr;gap:10px;margin-bottom:8px}
         @media(min-width:800px){.tri{grid-template-columns:1fr 1fr 1fr}}
-        .row{margin-bottom:10px}
-        .lbl{display:block;font-weight:600;margin-bottom:6px}
-        .req{color:#b00020;margin-left:2px}
-        .inp{width:100%;padding:10px 12px;border:1px solid #d0d7e2;border-radius:10px;background:#fff;outline:none}
-        .inp:focus{border-color:#8fb3ff;box-shadow:0 0 0 3px rgba(56,126,255,.15)}
+        .row{margin-bottom:12px}
+        .labelWrap{display:flex;align-items:center;justify-content:space-between;margin-bottom:6px}
+        .label{font-weight:700;font-size:13.5px;text-transform:uppercase;letter-spacing:.06em}
+        .req{color:#ff6a00;margin-left:6px}
+        .input{width:100%;padding:12px 12px;border:1px solid #cfcfcf;border-radius:10px;background:#fff;outline:none;font-size:14px}
+        .input:focus{border-color:#ff6a00;box-shadow:0 0 0 3px rgba(255,106,0,.18)}
         .mono{font-family:ui-monospace,Menlo,SFMono-Regular,Consolas,monospace}
-        .note{padding:10px 12px;border-radius:10px;margin:6px 0 10px;font-size:14px}
-        .warn{background:#fff7e6;border:1px solid #ffd7a0;color:#7a4b00}
-        .err{background:#ffefef;border:1px solid #ffcfcf;color:#9a1a1a}
-        .actions{display:flex;gap:10px;flex-wrap:wrap;margin-top:4px}
-        .btn{padding:10px 14px;border-radius:10px;border:1px solid #d0d7e2;background:#f7f9fc;cursor:pointer}
-        .btn:hover{background:#eef3fb}
-        .btn:disabled{opacity:.6;cursor:not-allowed}
-        .btn.primary{background:#0b66ff;color:#fff;border-color:#0b66ff}
-        .btn.primary:hover{background:#0957d9}
-        .h2{margin:0 0 8px;font-size:18px;font-weight:700}
-        .preview{border:1px solid #e6ebf3;border-radius:10px;padding:16px;background:#0b1020;color:#e7f1ff;min-height:160px}
+        .previewHeader{font-weight:800;text-transform:uppercase;font-size:12px;letter-spacing:.08em;margin-bottom:10px;color:#222}
+        .preview{border:1px solid #0f1219;border-radius:10px;padding:16px;background:#0f1219;color:#eef3ff;min-height:160px}
         .muted{opacity:.6}
+        .note{padding:10px 12px;border-radius:10px;margin:8px 0 10px;font-size:14px}
+        .warn{background:#fff5ec;border:1px solid #ffd2b3;color:#8a3a00}
+        .err{background:#ffecec;border:1px solid #ffc7c7;color:#a31212}
+        .actionsTop,.actionsBottom{display:flex;gap:10px;flex-wrap:wrap}
+        .btn{padding:10px 14px;border-radius:10px;border:1px solid #d4d4d4;background:#f7f7f7;cursor:pointer;font-weight:600}
+        .btn:hover{background:#efefef}
+        .btn:disabled{opacity:.6;cursor:not-allowed}
+        .btn.primary{background:#ff6a00;color:#fff;border-color:#ff6a00}
+        .btn.primary:hover{background:#e55f00}
       `}</style>
     </div>
   );
