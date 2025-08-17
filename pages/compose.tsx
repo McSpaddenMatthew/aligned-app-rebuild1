@@ -1,4 +1,3 @@
-cat > pages/compose.tsx <<'EOF'
 import { useMemo, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
@@ -64,7 +63,7 @@ export default function Compose() {
           hmTranscript: form.hmTranscript,
           // optionals
           candidateResume: form.candidateResume,
-          recruiterNotes: form.roleContext, // <- extra intel
+          recruiterNotes: form.roleContext,
         }),
       });
       const json = await res.json();
@@ -81,7 +80,7 @@ export default function Compose() {
   async function copyMarkdown() {
     if (!out) return;
     await navigator.clipboard.writeText(out);
-    alert("Trust report copied (Markdown). Paste into email and edit freely.");
+    alert("Trust report copied (Markdown).");
   }
 
   function markdownToHtml(md: string) {
@@ -221,4 +220,3 @@ export default function Compose() {
     </div>
   );
 }
-EOF
