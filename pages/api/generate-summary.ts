@@ -1,92 +1,129 @@
-// pages/api/generate-summary.ts
 import type { NextApiRequest, NextApiResponse } from "next";
-import { createClient } from "@supabase/supabase-js";
+import OpenAI from "openai";
+import { z } from "zod";
 
-const url = process.env.NEXT_PUBLIC_SUPABASE_URL as string;
+const apiKey = process.env.OPENAI_API_KEY;
+const model = process.env.OPENAI_MODEL || "gpt-5.1-mini";
+const openai = new OpenAI({ apiKey });
 
-// Use service role key if available (server-only), else anon (MVP).
-const serviceKey =
-  (process.env.SUPABASE_SERVICE_ROLE_KEY as string) ||
-  (process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY as string);
+const InputsSchema = z.object({
+  candidateName: z.string().optional().default("Candidate"),
+  candidateTitle: z.string().optional().default(""),
+  location: z.string().optional().default(""),
+  industryFit: z.string().optional().default(""),
+  jobDescription: z.string().optional().default(""),
+  recruiterNotes: z.string().optional().default(""),
+  hmTranscript: z.string().optional().default(""),
+  candidateResume: z.string().optional().default(""),
+  candidateCall: z.string().optional().default(""),
+  maxTokens: z.number().optional().default(1000),
+  temperature: z.number().optional().default(0.3),
+});
 
-const supabase = createClient(url, serviceKey, { auth: { persistSession: false } });
+function buildMessages(input: z.infer<typeof InputsSchema>) {
+  const { candidateName, candidateTitle, location, industryFit,
+          jobDescription, recruiterNotes, hmTranscript,
+          candidateResume, candidateCall } = input;
 
-type Ok =
-  | { id: string; summary: string; candidate_name?: string | null; role?: string | null }
-type Err = { error: string };
+  const system = `
+You are **Aligned**, a recruiter's trust assistant.
+Transform messy inputs (JD, notes, transcripts, resume) into a crisp, hiring-manager-ready **Candidate Trust Report**.
 
-function extractCandidateName(text: string): string | null {
-  const label =
-    text.match(/^\s*(?:candidate(?:\s*name)?|name)\s*:\s*(.+)$/im)?.[1] ||
-    text.match(/^\s*#{1,3}\s+(.+)$/m)?.[1]; // first heading
-  if (label) return label.trim();
-  const bullet = text.match(/^[\-\*\u2022]\s+([A-Z][a-z]+(?:\s+[A-Z][a-z]+)+)/m)?.[1];
-  return bullet ? bullet.trim() : null;
+Rules:
+- Do NOT copy-paste big blocks from inputs.
+- Synthesize, tighten, neutral/professional tone.
+- Prefer quantified outcomes; include timestamps in quotes if present.
+- If info is missing, say "Not observed." Do not invent specifics.
+
+Output (Markdown, exact order):
+
+# [Candidate Name] — [Title] · [Location]
+*Industry Fit:* [one short line]
+
+## What You Shared – What the Candidate Brings
+| Hiring Context (from HM/Req) | Candidate Evidence (with timestamps if available) |
+|---|---|
+| ... | ... |
+
+## Why This Candidate Was Selected
+(2–4 sentences.)
+
+## Known Risks & Mitigations
+- **Risk:** ... → **Mitigation:** ...
+- ...
+
+## Outcomes Delivered
+- [quantified outcome]
+- ...
+
+## How ${candidateName} Frames Data for Leadership Decisions
+(Short narrative on decision framing for execs.)
+`;
+
+  const user = `
+Candidate Header:
+- Name: ${candidateName}
+- Title: ${candidateTitle}
+- Location: ${location}
+- Industry Fit: ${industryFit}
+
+Raw Inputs:
+--- Job Description ---
+${jobDescription}
+
+--- Recruiter Notes ---
+${recruiterNotes}
+
+--- Hiring Manager Transcript ---
+${hmTranscript}
+
+--- Candidate Resume ---
+${candidateResume}
+
+--- Candidate Call Transcript ---
+${candidateCall}
+`;
+  return [{ role: "system", content: system }, { role: "user", content: user }] as const;
 }
 
-function extractRole(text: string): string | null {
-  const role =
-    text.match(/^\s*(?:role|position|title)\s*:\s*(.+)$/im)?.[1] ||
-    text.match(/\bfor\s+the\s+role\s+of\s+(.+?)(?:[,\n]|$)/i)?.[1];
-  return role ? role.trim() : null;
+function looksLikeEcho(output: string, inputs: z.infer<typeof InputsSchema>) {
+  const blocks = [inputs.candidateResume, inputs.jobDescription]
+    .map((t) => (t || "").trim())
+    .filter((t) => t.length > 400);
+  return blocks.some((b) => output.includes(b.slice(0, 200)));
 }
 
-export default async function handler(
-  req: NextApiRequest,
-  res: NextApiResponse<Ok | Err>
-) {
-  if (req.method !== "POST") {
-    res.status(405).json({ error: "Method not allowed" });
-    return;
-  }
-
+export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   try {
-    const { input, candidateName, role, userId } = (req.body || {}) as {
-      input?: string;
-      candidateName?: string;
-      role?: string;
-      userId?: string | null;
-    };
+    if (req.method !== "POST") return res.status(405).json({ error: "Use POST." });
+    if (!apiKey) return res.status(500).json({ error: "Missing OPENAI_API_KEY in .env.local" });
 
-    const summary = (input || "").trim();
-    if (!summary) return res.status(400).json({ error: "Missing 'input' text." });
+    const parsed = InputsSchema.safeParse(req.body);
+    if (!parsed.success) return res.status(400).json({ error: "Invalid input", details: parsed.error.flatten() });
 
-    // Inferred values (client values win)
-    const inferredName = candidateName?.trim() || extractCandidateName(summary);
-    const inferredRole = role?.trim() || extractRole(summary);
+    const inputs = parsed.data;
+    const messages = buildMessages(inputs);
 
-    // If your DB requires user_id NOT NULL, enforce here:
-    if (!userId) {
-      return res.status(400).json({ error: "Missing user id" });
-    }
-
-    const payload = {
-      user_id: userId, // ✅ satisfy NOT NULL constraint
-      candidate_name: inferredName || null,
-      role: inferredRole || null,
-      summary_markdown: summary,
-    };
-
-    const { data, error } = await supabase
-      .from("cases")
-      .insert([payload])
-      .select("id")
-      .limit(1);
-
-    if (error) {
-      return res.status(500).json({ error: `Insert failed: ${error.message}` });
-    }
-
-    const id = data?.[0]?.id as string | undefined;
-    if (!id) return res.status(500).json({ error: "Saved but no id returned." });
-
-    res.status(200).json({
-      id,
-      summary,
-      candidate_name: inferredName || null,
-      role: inferredRole || null,
+    const r1 = await openai.chat.completions.create({
+      model, temperature: inputs.temperature, max_tokens: inputs.maxTokens, messages,
     });
+    let text = r1.choices?.[0]?.message?.content?.trim() || "";
+
+    if (looksLikeEcho(text, inputs)) {
+      const r2 = await openai.chat.completions.create({
+        model, temperature: Math.max(0.2, inputs.temperature - 0.1), max_tokens: inputs.maxTokens,
+        messages: [
+          messages[0],
+          { role: "user", content: (messages[1] as any).content + "\nIMPORTANT: Do not copy large blocks. Synthesize concisely with evidence." },
+        ],
+      });
+      text = r2.choices?.[0]?.message?.content?.trim() || text;
+      return res.status(200).json({ ok: true, model, generated: text, meta: { retry: true, ts: new Date().toISOString() } });
+    }
+
+    return res.status(200).json({ ok: true, model, generated: text, meta: { retry: false, ts: new Date().toISOString() } });
   } catch (e: any) {
-    res.status(500).json({ error: e?.message || "Unexpected error" });
+    console.error("[Aligned] generate-summary error:", e?.message || e);
+    return res.status(500).json({ error: "Generation failed", details: e?.message || String(e) });
   }
 }

@@ -1,7 +1,10 @@
 {
   "compilerOptions": {
     "target": "ES2020",
-    "lib": ["DOM", "ES2020"],
+    "lib": [
+      "DOM",
+      "ES2020"
+    ],
     "module": "ESNext",
     "moduleResolution": "Node",
     "jsx": "preserve",
@@ -11,12 +14,22 @@
     "strict": true,
     "forceConsistentCasingInFileNames": true,
     "incremental": true,
-
     // 👇 additions so Vercel stops complaining about 'openai'
-    "typeRoots": ["./types", "./node_modules/@types"],
-    "skipLibCheck": true
+    "typeRoots": [
+      "./types",
+      "./node_modules/@types"
+    ],
+    "skipLibCheck": true,
+    "allowJs": true,
+    "esModuleInterop": true
   },
-  "include": ["next-env.d.ts", "**/*.ts", "**/*.tsx", "types/**/*.d.ts"],
-  "exclude": ["node_modules"]
+  "include": [
+    "next-env.d.ts",
+    "**/*.ts",
+    "**/*.tsx",
+    "types/**/*.d.ts"
+  ],
+  "exclude": [
+    "node_modules"
+  ]
 }
-
