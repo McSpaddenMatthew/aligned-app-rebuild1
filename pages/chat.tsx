@@ -1,6 +1,8 @@
+// pages/chat.tsx
 import { useState } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
+import type { GetServerSideProps } from "next";
 
 type Msg = { role: "user" | "assistant"; content: string };
 
@@ -119,12 +121,16 @@ Candidate Call Transcript: [03:10] ...`}
 
       <div style={{ marginTop: 24 }}>
         {messages.map((m, i) => (
-          <div key={i} style={{
-            marginBottom: 16,
-            background: m.role === "assistant" ? "#0b1020" : "#f6f8fd",
-            color: m.role === "assistant" ? "#e7f1ff" : "#111",
-            padding: 16, borderRadius: 8
-          }}>
+          <div
+            key={i}
+            style={{
+              marginBottom: 16,
+              background: m.role === "assistant" ? "#0b1020" : "#f6f8fd",
+              color: m.role === "assistant" ? "#e7f1ff" : "#111",
+              padding: 16,
+              borderRadius: 8,
+            }}
+          >
             <div style={{ fontSize: 12, opacity: 0.7, marginBottom: 6 }}>
               {m.role === "assistant" ? "Aligned" : "You"}
             </div>
@@ -146,3 +152,9 @@ Candidate Call Transcript: [03:10] ...`}
     </div>
   );
 }
+
+// ⬇️ Force SSR so Next.js doesn't try to pre-render /chat at build time.
+export const getServerSideProps: GetServerSideProps = async () => {
+  return { props: {} };
+};
+
