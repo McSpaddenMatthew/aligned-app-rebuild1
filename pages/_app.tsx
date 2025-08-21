@@ -1,12 +1,15 @@
+// /pages/_app.tsx
 import type { AppProps } from "next/app";
-import NavBar from "../components/NavBar";
-import "../styles/globals.css";
+import { useState } from "react";
+import { SessionContextProvider, createBrowserSupabaseClient } from "@supabase/auth-helpers-nextjs";
+import "../styles/globals.css"; // keep/remove based on your project
 
 export default function MyApp({ Component, pageProps }: AppProps) {
+  const [supabaseClient] = useState(() => createBrowserSupabaseClient());
   return (
-    <>
-      <NavBar />
+    <SessionContextProvider supabaseClient={supabaseClient} initialSession={(pageProps as any)?.initialSession}>
       <Component {...pageProps} />
-    </>
+    </SessionContextProvider>
   );
 }
+
