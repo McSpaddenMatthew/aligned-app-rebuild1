@@ -7,6 +7,7 @@ import { createClient } from "@supabase/supabase-js";
 import { Inter, Merriweather } from "next/font/google";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
+import type { GetServerSideProps } from "next"; // ⬅️ added
 
 const inter = Inter({ subsets: ["latin"], display: "swap", variable: "--font-inter" });
 const merri = Merriweather({
@@ -45,33 +46,27 @@ function fmtDate(iso?: string | null) {
 
 function deriveTitleFromMarkdown(md?: string | null) {
   if (!md) return "";
-  // First heading like "# Jane Doe — Sr Director"
   const h = md.match(/^\s*#{1,3}\s+(.+)$/m)?.[1];
   if (h) return h.trim();
-
-  // A "Candidate:" label somewhere
   const lab = md.match(/candidate(?:\s*name)?\s*:\s*([^\n]+)/i)?.[1];
   if (lab) return lab.trim();
-
-  // Fallback: first non-empty line, pull a "First Last"
   const first = (md.split(/\r?\n/).find((l) => l.trim()) || "").trim();
   const nameMatch = first.match(/\b([A-Z][a-z]+(?:\s+[A-Z][a-z]+)+)\b/);
   return (nameMatch && nameMatch[1]) || "";
 }
 
-// crude Markdown → plain text for email pasting
 function markdownToText(md: string) {
   return md
-    .replace(/```[\s\S]*?```/g, (m) => m.replace(/```/g, "")) // code fences → raw
-    .replace(/^#+\s+/gm, "") // headings
-    .replace(/\*\*([^*]+)\*\*/g, "$1") // bold
-    .replace(/\*([^*]+)\*/g, "$1") // italic
+    .replace(/```[\s\S]*?```/g, (m) => m.replace(/```/g, ""))
+    .replace(/^#+\s+/gm, "")
+    .replace(/\*\*([^*]+)\*\*/g, "$1")
+    .replace(/\*([^*]+)\*/g, "$1")
     .replace(/__([^_]+)__/g, "$1")
     .replace(/_([^_]+)_/g, "$1")
     .replace(/`([^`]+)`/g, "$1")
-    .replace(/^\s*[-*]\s+/gm, "• ") // bullets
-    .replace(/\[(.*?)\]\((.*?)\)/g, "$1") // links -> text
-    .replace(/\n{3,}/g, "\n\n") // collapse extra blank lines
+    .replace(/^\s*[-*]\s+/gm, "• ")
+    .replace(/\[(.*?)\]\((.*?)\)/g, "$1")
+    .replace(/\n{3,}/g, "\n\n")
     .trim();
 }
 
@@ -144,7 +139,6 @@ export default function CaseDetail() {
         </header>
 
         <main className="mx-auto max-w-3xl px-6 py-8">
-          {/* Title + actions */}
           <div className="mb-6 flex items-center justify-between gap-4">
             <h1 className="text-2xl font-semibold tracking-tight text-neutral-900">
               {title}
@@ -169,7 +163,6 @@ export default function CaseDetail() {
             </div>
           </div>
 
-          {/* Body */}
           {loading && (
             <div className="rounded-xl border border-neutral-200 bg-white p-4 text-neutral-600">
               Loading…
@@ -191,10 +184,7 @@ export default function CaseDetail() {
           {!loading && !err && row && (
             <article
               className="prose prose-neutral max-w-none rounded-2xl border border-neutral-200 bg-white p-6 shadow-sm"
-              style={{
-                // Gentle tightening for email-like density
-                lineHeight: 1.5,
-              }}
+              style={{ lineHeight: 1.5 }}
             >
               <div className="not-prose mb-4">
                 <div className="text-xs uppercase tracking-wide text-neutral-500">
@@ -214,3 +204,9 @@ export default function CaseDetail() {
     </>
   );
 }
+
+// ⬇️ Force SSR so Next.js doesn't try to pre-render this dynamic route at build time.
+export const getServerSideProps: GetServerSideProps = async () => {
+  return { props: {} };
+};
+
