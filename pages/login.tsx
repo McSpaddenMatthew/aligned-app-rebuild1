@@ -1,78 +1,93 @@
-import Head from "next/head";
-import { useEffect, useState } from "react";
+// /pages/login.tsx
+import { useState, FormEvent, useEffect } from "react";
 import { useRouter } from "next/router";
-import { createClient } from "@supabase/supabase-js";
-
-// Browser client
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-);
+import { getSupabaseBrowser } from "../lib/supabase-browser";
 
 export default function Login() {
-  const router = useRouter();
   const [email, setEmail] = useState("");
-  const [busy, setBusy] = useState(false);
-  const [msg, setMsg] = useState<string | null>(null);
+  const [sent, setSent] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const router = useRouter();
 
-  // If already logged in, bounce away
+  // show ?error=... from callback if present
   useEffect(() => {
-    const { data: sub } = supabase.auth.onAuthStateChange((_e, session) => {
-      if (session) router.replace("/"); // or "/dashboard"
-    });
+    if (typeof router.query.error === "string") setError(router.query.error);
+  }, [router.query.error]);
 
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      if (session) router.replace("/");
-    });
-
-    return () => sub.subscription.unsubscribe();
-  }, [router]);
-
-  async function sendLink(e: React.FormEvent<HTMLFormElement>) {
+  async function onSubmit(e: FormEvent) {
     e.preventDefault();
-    if (!email.trim()) return setMsg("Enter your email.");
+    setError(null);
 
-    setBusy(true);
-    setMsg(null);
+    const supabase = getSupabaseBrowser();
+
+    // 🔒 Hardcode your domain (use the exact preview or prod you are testing)
+    // Example for your app:
+    const redirectBase = "https://alignedapp.vercel.app"; 
+    // If testing a preview, replace above with: "https://aligned-app-rebuild1.vercel.app"
 
     const { error } = await supabase.auth.signInWithOtp({
       email,
-      options: { emailRedirectTo: `${window.location.origin}/auth/callback` },
+      options: {
+        emailRedirectTo: `${redirectBase}/auth/confirm`, // bridge handles hash links
+      },
     });
 
-    setBusy(false);
-    if (error) setMsg(error.message);
-    else setMsg("Check your email for the login link.");
+    if (error) setError(error.message);
+    else setSent(true);
+  }
+
+  if (sent) {
+    return (
+      <main style={{ padding: 24 }}>
+        <h1 style={{ fontSize: 24, fontWeight: 700 }}>Check your email</h1>
+        <p>Click the magic link to finish signing in.</p>
+      </main>
+    );
   }
 
   return (
-    <>
-      <Head><title>Login | Aligned</title></Head>
-      <main style={{ maxWidth: 440, margin: "64px auto", padding: 24 }}>
-        <h1 style={{ marginBottom: 12 }}>Log in</h1>
-        <form onSubmit={sendLink}>
-          <label htmlFor="email">Email</label>
-          <input
-            id="email"
-            type="email"
-            required
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            style={{
-              width: "100%", padding: "10px 12px", marginTop: 8, marginBottom: 12,
-              borderRadius: 8, border: "1px solid #ddd",
-            }}
-          />
-          <button
-            type="submit"
-            disabled={busy}
-            style={{ width: "100%", padding: "10px 12px", borderRadius: 8, border: 0, cursor: "pointer" }}
-          >
-            {busy ? "Sending…" : "Send magic link"}
-          </button>
-        </form>
-        {msg && <p style={{ marginTop: 12 }}>{msg}</p>}
-      </main>
-    </>
+    <main style={{ padding: 24, maxWidth: 420 }}>
+      <h1 style={{ fontSize: 28, fontWeight: 700, marginBottom: 8 }}>Sign in</h1>
+      <p style={{ opacity: 0.7, marginBottom: 16 }}>
+        We’ll email you a one-time magic link.
+      </p>
+
+      <form onSubmit={onSubmit} className="space-y-3">
+        <input
+          type="email"
+          required
+          value={email}
+          onChange={(e) => setEmail(e.target.value)}
+          placeholder="you@company.com"
+          className="w-full border rounded px-3 py-2"
+        />
+        <button
+          type="submit"
+          className="px-4 py-2 rounded bg-black text-white"
+        >
+          Send magic link
+        </button>
+      </form>
+
+      {error && (
+        <div
+          style={{
+            marginTop: 12,
+            padding: 10,
+            border: "1px solid #fecaca",
+            background: "#fef2f2",
+            borderRadius: 8,
+          }}
+        >
+          <strong>Sign-in error:</strong>
+          <div style={{ fontSize: 14, opacity: 0.85, marginTop: 4 }}>
+            {error}
+          </div>
+        </div>
+      )}
+    </main>
   );
 }
+
+
+
