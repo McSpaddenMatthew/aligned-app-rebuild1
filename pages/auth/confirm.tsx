@@ -1,16 +1,17 @@
 // /pages/auth/confirm.tsx
 import { useEffect } from "react";
+import type { GetServerSideProps } from "next";
 
 /**
  * Bridge for hash-based magic links (/#access_token=...).
- * Moves the hash into the querystring and forwards to /api/auth/callback
+ * Reads the hash in the browser, then forwards to /api/auth/callback
  * so the server can set the Supabase auth cookie.
  */
 export default function Confirm() {
   useEffect(() => {
     if (typeof window === "undefined") return;
 
-    const hash = window.location.hash; // e.g. "#access_token=...&type=..."
+    const hash = window.location.hash; // e.g. "#access_token=...&refresh_token=...&type=..."
     if (!hash || hash.length < 2) {
       window.location.replace("/login");
       return;
@@ -27,4 +28,9 @@ export default function Confirm() {
     </main>
   );
 }
+
+/** Force SSR to avoid static pre-render of this client-only bridge page. */
+export const getServerSideProps: GetServerSideProps = async () => {
+  return { props: {} };
+};
 
