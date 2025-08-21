@@ -2,7 +2,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import type { GetServerSideProps } from "next";
-import { getSupabaseServer } from "../lib/supabase-server"; // <- as in my earlier template
+import { getSupabaseServer } from "../lib/supabase-server";
 
 type Summary = { id: string; title: string | null; created_at: string };
 
@@ -73,8 +73,8 @@ export default function Dashboard() {
   );
 }
 
-// 🔒 SSR guard: ONLY checks for a session; doesn’t fetch data.
-// This avoids the “my email works / others don’t” loop when cookies aren’t set yet.
+// 🔒 SSR guard: checks for a session; doesn’t fetch data.
+// This prevents redirect loops when cookies aren’t set yet.
 export const getServerSideProps: GetServerSideProps = async (ctx) => {
   const supabase = getSupabaseServer(ctx);
   const { data: { session } } = await supabase.auth.getSession();
@@ -84,6 +84,3 @@ export const getServerSideProps: GetServerSideProps = async (ctx) => {
   return { props: {} };
 };
 
-
-import type { GetServerSideProps } from 'next';
-export const getServerSideProps: GetServerSideProps = async () => ({ props: {} });
