@@ -1,40 +1,32 @@
-import { useState } from "react";
+// pages/test-generate.tsx
+import type { GetServerSideProps } from "next";
+import Link from "next/link";
+
+// Prevent static pre-render during Vercel build
+export const getServerSideProps: GetServerSideProps = async () => ({ props: {} });
 
 export default function TestGenerate() {
-  const [loading, setLoading] = useState(false);
-  const [out, setOut] = useState("");
-
-  async function run() {
-    setLoading(true); setOut("");
-    const res = await fetch("/api/generate-summary", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        candidateName: "Ava Patel",
-        candidateTitle: "Senior Data Engineer",
-        location: "Austin, TX",
-        industryFit: "Value-based care analytics",
-        jobDescription: "Lead data engineering; build ELT in DBT/Snowflake; mentor team; partner with finance.",
-        recruiterNotes: "Strong with CFO comms; mentors juniors; thrives in ambiguity.",
-        hmTranscript: "[00:14] Need reliable ELT to finance. [06:02] Decisions, not dashboards.",
-        candidateResume: "Snowflake, DBT, Airflow; reduced costs 22%.",
-        candidateCall: "[03:10] I frame tradeoffs in cash impact and SLA risk.",
-      }),
-    });
-    const json = await res.json();
-    setLoading(false);
-    setOut(json.generated || JSON.stringify(json, null, 2));
-  }
-
   return (
-    <div style={{ padding: 24, maxWidth: 900, margin: "0 auto", fontFamily: "ui-sans-serif, system-ui" }}>
-      <h1>Aligned — Trust Report (Test)</h1>
-      <button onClick={run} disabled={loading} style={{ padding: "10px 14px", borderRadius: 8 }}>
-        {loading ? "Generating..." : "Generate Example"}
-      </button>
-      <pre style={{ marginTop: 24, whiteSpace: "pre-wrap", background: "#0b1020", color: "#e7f1ff", padding: 16, borderRadius: 8 }}>
-        {out}
-      </pre>
-    </div>
+    <main className="min-h-screen p-8 bg-white text-[#0A0A0A]">
+      <div className="max-w-2xl">
+        <h1 className="text-2xl font-semibold">Test Generate</h1>
+        <p className="mt-2 text-slate-700">Minimal placeholder to keep builds green.</p>
+
+        <form className="mt-6 space-y-4" onSubmit={(e) => e.preventDefault()}>
+          <label className="block">
+            <span className="text-sm font-medium">Notes</span>
+            <textarea className="mt-1 w-full rounded border p-2" rows={4} />
+          </label>
+          <button className="rounded bg-black px-4 py-2 text-white" type="submit">
+            Generate
+          </button>
+        </form>
+
+        <Link href="/dashboard" className="mt-6 inline-block text-sm underline">
+          Back to Dashboard
+        </Link>
+      </div>
+    </main>
   );
 }
+
