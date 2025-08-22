@@ -1,160 +1,160 @@
+// pages/api/generate-summary.ts
 import type { NextApiRequest, NextApiResponse } from "next";
-import OpenAI from "openai";
-import { z } from "zod";
+import { createClient } from "@supabase/supabase-js";
 
-const apiKey = process.env.OPENAI_API_KEY;
-const model = process.env.OPENAI_MODEL || "gpt-4o-mini";
-const STRICT = (process.env.ALIGNED_STRICT || "true").toLowerCase() !== "false";
-const openai = new OpenAI({ apiKey });
+/**
+ * Required env vars:
+ * - OPENAI_API_KEY
+ * - NEXT_PUBLIC_SUPABASE_URL
+ * - (one of) SUPABASE_SERVICE_ROLE_KEY | NEXT_PUBLIC_SUPABASE_ANON_KEY
+ */
 
-const InputsSchema = z.object({
-  candidateName: z.string().optional().default("Candidate"),
-  candidateTitle: z.string().optional().default(""),
-  location: z.string().optional().default(""),
-  industryFit: z.string().optional().default(""),
+const supabase = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  process.env.SUPABASE_SERVICE_ROLE_KEY ?? process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+);
 
-  jobDescription: z.string().optional().default(""),
-  recruiterNotes: z.string().optional().default(""),
-  hmTranscript: z.string().optional().default(""),
-  candidateResume: z.string().optional().default(""),
-  candidateCall: z.string().optional().default(""),
+type Parts = {
+  hiringManager?: string;
+  candidate?: string;
+  jd?: string;
+  resume?: string;
+  recruiterNotes?: string;
+};
 
-  maxTokens: z.number().optional().default(1100),
-  temperature: z.number().optional().default(0.2),
-});
+function buildPrompt(parts: Parts) {
+  const hm = (parts.hiringManager ?? "").trim();
+  const cand = (parts.candidate ?? "").trim();
+  const jd = (parts.jd ?? "").trim();
+  const resume = (parts.resume ?? "").trim();
+  const notes = (parts.recruiterNotes ?? "").trim();
 
-function buildMessages(input: z.infer<typeof InputsSchema>) {
-  const {
-    candidateName, candidateTitle, location, industryFit,
-    jobDescription, recruiterNotes, hmTranscript, candidateResume, candidateCall,
-  } = input;
+  return `
+You are a recruiting analyst producing a decision-useful summary for a PE-backed company.
+Be concise and strictly grounded in the provided inputs. Do NOT invent facts.
+If evidence is insufficient for any bullet or section, write exactly: "No supporting evidence found."
 
-  const system = `
-You are **Aligned**, a recruiter's trust assistant. Produce a decision-ready report that a hiring manager can act on.
+Formatting rules:
+- Output clean Markdown (no code fences).
+- Prefer short, scannable bullets.
+- Merge/condense duplicate or overlapping bullets (avoid redundancy).
+- If timecodes appear in transcripts (e.g., [00:12:34] or (12:34)), include them at the end of the relevant bullet.
 
-## Evidence Weighting (desc)
-1) **HM Conversation** — source of truth.
-2) **Candidate Call** — next strongest.
-3) **Job Description** — define must-haves from JD + HM.
-4) **Recruiter Intel** — context.
-5) **Resume** — **low-trust**; resume-only evidence counts as **zero**. Flag contradictions.
+Return the summary with these EXACT sections (no extras, no Role Snapshot):
 
-## Decision Rules ${STRICT ? "(STRICT MODE ON)" : ""}
-- Derive **3–6 must-haves** from HM + JD (skills/outcomes/behaviors).
-- For each must-have, assign **Coverage**:
-  - **STRONG**: clear evidence from HM or Candidate Call (quotes/timestamps ok).
-  - **PARTIAL**: some signal but incomplete.
-  - **MISSING**: no reliable evidence or **resume-only**.
-- If HM states a **no-go** that appears true → **DO NOT PROCEED**.
-- If **≥2 must-haves are MISSING** → **DO NOT PROCEED**.
-- If **1 MISSING** or a major risk is unmitigated → **HOLD** (ask for specific evidence).
-- Only when all must-haves are STRONG/PARTIAL **and** risks are mitigated → **PROCEED**.
-- Prefer **HOLD/DECLINE** when evidence is thin or conflicting.
+## Hiring Manager Priorities (with timecodes)
+- 4–6 bullets distilled from the HM transcript.
+- Include timecodes when present.
+- If priorities are unclear: a SINGLE bullet: "No supporting evidence found."
 
-## Confidence to Meet (0–10) — scoring rubric
-Compute a 0–10 score for whether the HM should take a first conversation.
-1) Let N = # of must-haves (3–6). Let S = STRONG count, P = PARTIAL count, M = MISSING count.
-2) BaseScore = round( (2*S + 1*P) / (2*N) * 10 ).
-3) Adjustments (clamp 0–10 at the end):
-   - If HM has an explicit **no-go** that appears true → set max to 3.
-   - For each **MISSING** → −2.
-   - For each **major unmitigated risk** → −1 to −3 (your judgment; be conservative).
-   - **Resume-only evidence never increases score**.
-Return a single integer 0–10.
+## Candidate Highlights (with timecodes)
+- 4–6 bullets that map to HM needs.
+- Phrase as “Matches Priority X: …” or “Gap vs Priority X: …”.
+- Include timecodes when present.
+- Remove duplicate ideas.
+- If insufficient evidence: a SINGLE bullet: "No supporting evidence found."
 
-## Style
-- Direct, professional, concise. No puffery. Short sentences.
-- Include timestamps if provided like [03:10] but **never invent them**.
-- Do not copy large blocks from inputs.
+---
+## Strengths
+- 3–5 bullets focused on repeatable impact.
+- If insufficient evidence: a SINGLE bullet: "No supporting evidence found."
 
-## Output Format (Markdown)
-> **Bottom Line:** PROCEED | HOLD | DO NOT PROCEED — one-line reason.  
-> **Confidence to Meet (0–10): X** — one line explaining the score.
+---
+## Risks / Concerns
+- 3–5 bullets (skill gaps, ramp risk, cultural/fit risks).
+- If insufficient evidence: a SINGLE bullet: "No supporting evidence found."
 
-# ${candidateName} — ${candidateTitle}${location ? " · " + location : ""}
-*Industry Fit:* ${industryFit || "—"}
+## Private Equity Lens
+- **Value Creation Impact** — bullets on where the candidate can move the needle (cost, speed, quality, GTM enablement). If unclear: "No supporting evidence found."
+- **Execution Risk** — bullets on ramp risk, dependencies, knowledge gaps. If unclear: "No supporting evidence found."
+- **Upside Potential** — bullets on leadership runway/scope growth. If unclear: "No supporting evidence found."
 
-## Coverage vs Must-Haves
-| Must-have | Evidence (cite HM/Call when possible) | Coverage |
-|---|---|---|
+Source material (verbatim):
 
-## What You Shared — What the Candidate Brings
-| Hiring Context (from HM/Req) | Candidate Evidence (with timestamps if available) |
-|---|---|
+[HIRING MANAGER TRANSCRIPT]
+${hm || "(none provided)"}
 
-## Why This Candidate Was Selected (or Not)
-- 2–4 bullets tied to **HM needs** and tradeoff thinking.
+[CANDIDATE TRANSCRIPT]
+${cand || "(none provided)"}
 
-## Known Risks & Mitigations
-- **Risk:** <specific> **Mitigation:** <practical step>.
-- Include contradictions (e.g., resume vs HM/Call).
+[JOB DESCRIPTION]
+${jd || "(none provided)"}
 
-## Outcomes Delivered
-- Concrete outcomes (numbers/improvements) or credible proxies.
+[RESUME]
+${resume || "(none provided)"}
 
-## How ${candidateName} Frames Data for Leadership Decisions
-- 1–3 bullets on framing **tradeoffs / cash impact / SLA risk** into decisions.
+[RECRUITER NOTES]
+${notes || "(none provided)"}
   `.trim();
+}
 
-  const user = [
-    `# HM Conversation (highest-weight)`,
-    hmTranscript || "(none)",
-    ``,
-    `# Candidate Call (second-highest)`,
-    candidateCall || "(none)",
-    ``,
-    `# Job Description / Must-haves`,
-    jobDescription || "(none)",
-    ``,
-    `# Recruiter Intel`,
-    recruiterNotes || "(none)",
-    ``,
-    `# Candidate Resume (low-trust corroboration)`,
-    candidateResume || "(none)",
-  ].join("\n");
+async function callOpenAI(prompt: string): Promise<string> {
+  const apiKey = process.env.OPENAI_API_KEY;
+  if (!apiKey) throw new Error("OPENAI_API_KEY is not set");
 
-  return [
-    { role: "system", content: system },
-    { role: "user", content: user },
-    { role: "user", content: "Generate the report exactly in the format above. Be decisive. Include the confidence score." },
-  ] as const;
+  const resp = await fetch("https://api.openai.com/v1/chat/completions", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${apiKey}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      model: "gpt-4o-mini",
+      messages: [
+        {
+          role: "system",
+          content:
+            "You write crisp, structured recruiting summaries for PE stakeholders. You never fabricate details.",
+        },
+        { role: "user", content: prompt },
+      ],
+      temperature: 0.2,
+      max_tokens: 1400,
+    }),
+  });
+
+  if (!resp.ok) {
+    const text = await resp.text().catch(() => "");
+    throw new Error(`OpenAI ${resp.status}: ${text || "request failed"}`);
+  }
+
+  const data = await resp.json();
+  const content =
+    data?.choices?.[0]?.message?.content ??
+    data?.choices?.[0]?.text ??
+    "";
+  return String(content).trim();
 }
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   try {
-    if (!apiKey) return res.status(500).json({ error: "Missing OPENAI_API_KEY" });
-    if (req.method !== "POST") return res.status(405).json({ error: "Method not allowed" });
+    if (req.method !== "POST") return res.status(405).send("Method not allowed");
 
-    const parsed = InputsSchema.safeParse(req.body);
-    if (!parsed.success) return res.status(400).json({ error: "Invalid input", details: parsed.error.format() });
-
-    const inputs = parsed.data;
-    const messages = buildMessages(inputs);
-
-    const r1 = await openai.chat.completions.create({
-      model, temperature: inputs.temperature, max_tokens: inputs.maxTokens, messages,
-    });
-
-    let text = r1.choices?.[0]?.message?.content?.trim() || "";
-
-    // Anti-echo: if large chunk of an input leaked, request concise rewrite
-    const biggest = [inputs.hmTranscript, inputs.candidateCall, inputs.jobDescription, inputs.candidateResume]
-      .filter(Boolean).sort((a, b) => (b!.length - a!.length))[0] || "";
-    if (biggest && text.includes(biggest.slice(0, Math.min(200, biggest.length)))) {
-      const r2 = await openai.chat.completions.create({
-        model, temperature: Math.max(0.1, inputs.temperature - 0.1), max_tokens: inputs.maxTokens,
-        messages: [
-          messages[0],
-          { role: "user", content: "Rewrite concisely. Do not copy big blocks. Keep the same Bottom Line, confidence, and tables." },
-          { role: "assistant", content: text.slice(0, 2000) },
-        ],
-      });
-      text = r2.choices?.[0]?.message?.content?.trim() || text;
+    const { title, parts, user_id } = req.body ?? {};
+    if (!parts || typeof parts !== "object") {
+      return res.status(400).send("Body must include { parts: {...} }");
     }
 
-    return res.status(200).json({ ok: true, model, generated: text, meta: { strict: STRICT, ts: new Date().toISOString() } });
+    const prompt = buildPrompt(parts as Parts);
+    const generated = await callOpenAI(prompt);
+    if (!generated) throw new Error("Model returned empty content");
+
+    const insert = {
+      title: title ?? null,
+      summary: generated,
+      user_id: user_id ?? null, // keep nullable for MVP
+    };
+
+    const { data, error } = await supabase
+      .from("summaries")
+      .insert(insert)
+      .select("id")
+      .single();
+
+    if (error) return res.status(500).send(error.message);
+
+    return res.status(200).json({ id: data.id, summary: generated });
   } catch (e: any) {
-    console.error("[Aligned] generate-summary error:", e?.message || e);
-    return res.status(500).json({ error: "Generation failed", details: e?.message || String(e) });
+    return res.status(500).send(e?.message || "Internal error");
   }
 }

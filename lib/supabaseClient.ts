@@ -1,9 +1,7 @@
+// lib/supabaseClient.ts
 import { createClient } from "@supabase/supabase-js";
 
-const url = process.env.NEXT_PUBLIC_SUPABASE_URL || "";
-const anon = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || "";
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
+const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
 
-export const supabase =
-  url && anon
-    ? createClient(url, anon)
-    : (null as unknown as ReturnType<typeof createClient>); // "no-backend" mode
+export const supabase = createClient(supabaseUrl, supabaseAnonKey);
