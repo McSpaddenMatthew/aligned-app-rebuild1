@@ -1,15 +1,6 @@
-// /pages/_app.tsx
 import type { AppProps } from "next/app";
-import { useState } from "react";
-import { SessionContextProvider, createBrowserSupabaseClient } from "@supabase/auth-helpers-nextjs";
-import "../styles/globals.css"; // keep/remove based on your project
+// If you don't have this file, delete the import line.
 
-export default function MyApp({ Component, pageProps }: AppProps) {
-  const [supabaseClient] = useState(() => createBrowserSupabaseClient());
-  return (
-    <SessionContextProvider supabaseClient={supabaseClient} initialSession={(pageProps as any)?.initialSession}>
-      <Component {...pageProps} />
-    </SessionContextProvider>
-  );
+export default function App({ Component, pageProps }: AppProps) {
+  return <Component {...pageProps} />;
 }
-
