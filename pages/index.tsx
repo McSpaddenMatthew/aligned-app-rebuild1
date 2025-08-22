@@ -4,15 +4,17 @@ import Link from "next/link";
 import { useEffect } from "react";
 
 export default function Home() {
-  // ⬇️ Forward magic-link hashes (/#access_token=...) to the server callback
+  // Forward magic-link hashes (/#access_token=...) to the server callback
   useEffect(() => {
     if (typeof window === "undefined") return;
-    const h = window.location.hash; // e.g. "#access_token=...&refresh_token=...&type=magiclink"
+    const h = window.location.hash; // "#access_token=...&refresh_token=...&type=magiclink"
     if (h && h.length > 2 && /(?:^|&)access_token=|(?:^|&)error=/.test(h.slice(1))) {
       const qs = h.slice(1); // drop "#"
       window.location.replace(`/api/auth/callback?${qs}`);
     }
   }, []);
+
+  const year = new Date().getFullYear().toString(); // ensure a string primitive for SSR
 
   return (
     <>
@@ -177,7 +179,7 @@ export default function Home() {
         <section className="border-t border-slate-200">
           <div className="mx-auto max-w-6xl px-6 py-14 lg:py-16">
             <h2 className="text-2xl font-semibold">
-              Aligned is already powering executive hires in healthcare & finance.
+              Aligned is already powering executive hires in healthcare &amp; finance.
             </h2>
             <p className="mt-2 text-slate-700">
               We built Aligned first for Weld Recruiting — the trusted partner behind successful placements at:
@@ -288,7 +290,7 @@ export default function Home() {
         <footer className="border-t border-slate-200">
           <div className="mx-auto max-w-6xl px-6 py-8 text-sm text-slate-600">
             <div className="flex flex-col items-start justify-between gap-3 md:flex-row md:items-center">
-              <p>© {new Date().getFullYear()} Aligned</p>
+              <p>© {year} Aligned</p>
               <nav className="flex gap-5">
                 <Link href="/terms" className="hover:underline">Terms</Link>
                 <Link href="/privacy" className="hover:underline">Privacy</Link>
@@ -302,6 +304,3 @@ export default function Home() {
     </>
   );
 }
-
-
-
