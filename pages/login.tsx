@@ -1,65 +1,93 @@
-// pages/login.tsx
-import { useState } from "react";
+// pages/login.tsx — magic-link only (no password), handles hash -> sets session -> /dashboard
+import type { GetServerSideProps } from "next";
+import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/router";
 import { createPagesBrowserClient } from "@supabase/auth-helpers-nextjs";
 
+export const getServerSideProps: GetServerSideProps = async () => ({ props: {} });
+
+// Parse URL hash like: #access_token=...&refresh_token=...&type=recovery
+function getHashParams(): Record<string, string> {
+  if (typeof window === "undefined") return {};
+  const raw = window.location.hash.startsWith("#")
+    ? window.location.hash.slice(1)
+    : window.location.hash;
+  const out: Record<string, string> = {};
+  for (const part of raw.split("&")) {
+    const [k, v] = part.split("=");
+    if (k) out[decodeURIComponent(k)] = decodeURIComponent(v || "");
+  }
+  return out;
+}
+
 export default function Login() {
+  const supabase = useMemo(() => createPagesBrowserClient(), []);
   const router = useRouter();
-  const supabase = createPagesBrowserClient();
   const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState("");
+  const [msg, setMsg] = useState("");
+  const [sending, setSending] = useState(false);
 
-  const handleLogin = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setError("");
-    setLoading(true);
-
-    const { data, error } = await supabase.auth.signInWithPassword({
-      email,
-      password,
-    });
-
-    setLoading(false);
-
-    if (error) {
-      setError(error.message);
-    } else {
-      router.push("/dashboard");
+  // If we came back from the magic link with tokens in the hash, set the session and go to /dashboard
+  useEffect(() => {
+    const { access_token, refresh_token, error_description } = getHashParams();
+    if (error_description) {
+      setMsg(error_description);
+      history.replaceState(null, "", window.location.pathname);
+      return;
     }
+    if (access_token && refresh_token) {
+      (async () => {
+        const { error } = await supabase.auth.setSession({ access_token, refresh_token });
+        history.replaceState(null, "", window.location.pathname); // clean hash to avoid loops
+        if (!error) router.replace("/dashboard");
+        else setMsg(error.message);
+      })();
+    }
+  }, [supabase, router]);
+
+  const onSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setMsg("");
+    setSending(true);
+    const { error } = await supabase.auth.signInWithOtp({
+      email,
+      options: {
+        emailRedirectTo:
+          (process.env.NEXT_PUBLIC_SITE_URL || window.location.origin) + "/login",
+      },
+    });
+    setSending(false);
+    setMsg(error ? error.message : "Check your email for the magic link.");
   };
 
   return (
-    <main className="min-h-screen flex items-center justify-center p-4">
-      <div className="max-w-sm w-full space-y-6">
-        <h1 className="text-2xl font-semibold text-center">Sign in</h1>
-        <form onSubmit={handleLogin} className="space-y-4">
+    <main className="min-h-screen flex items-center justify-center p-6">
+      <div className="w-full max-w-md">
+        <h1 className="text-2xl font-semibold">Sign in</h1>
+        <p className="mt-2 text-slate-700">We’ll email you a magic link.</p>
+
+        <form onSubmit={onSubmit} className="mt-6 space-y-4" autoComplete="off">
           <input
             type="email"
-            placeholder="Email address"
+            inputMode="email"
+            autoComplete="username"
+            placeholder="you@company.com"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
             required
-            className="w-full p-2 border rounded"
-          />
-          <input
-            type="password"
-            placeholder="Password"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            required
-            className="w-full p-2 border rounded"
+            className="w-full rounded border px-3 py-2"
           />
           <button
             type="submit"
-            disabled={loading}
-            className="w-full bg-blue-600 text-white py-2 rounded disabled:opacity-50"
+            disabled={sending || !email}
+            className="w-full rounded bg-black px-4 py-2 text-white disabled:opacity-50"
           >
-            {loading ? "Signing in..." : "Sign in"}
+            {sending ? "Sending…" : "Send magic link"}
           </button>
-          {error && <p className="text-red-600 text-sm">{error}</p>}
         </form>
+
+        {msg && <p className="mt-4 text-sm text-slate-700">{msg}</p>}
+        <p className="mt-10 text-xs text-slate-500">© {String(new Date().getFullYear())} Aligned</p>
       </div>
     </main>
   );
