@@ -1,20 +1,38 @@
-import type { GetServerSideProps } from "next";
+// pages/index.tsx
 import Link from "next/link";
-
-export const getServerSideProps: GetServerSideProps = async () => ({ props: {} });
+import { useEffect, useState } from "react";
+import { createPagesBrowserClient } from "@supabase/auth-helpers-nextjs";
 
 export default function Home() {
+  const supabase = createPagesBrowserClient();
+  const [loading, setLoading] = useState(true);
+  const [session, setSession] = useState(null);
+
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      setSession(session);
+      setLoading(false);
+    });
+  }, [supabase]);
+
+  if (loading) {
+    return <p className="p-4">Loading...</p>;
+  }
+
   return (
-    <main className="min-h-screen bg-white text-[#0A0A0A] flex items-center justify-center p-8">
-      <div className="max-w-2xl w-full">
-        <h1 className="text-3xl font-semibold">Aligned</h1>
-        <p className="mt-3 text-slate-700">Hiring decisions need evidence. Recruiters need trust.</p>
-        <div className="mt-6 flex gap-3">
-          <Link href="/login" className="inline-flex items-center justify-center rounded-md bg-[#0A0A0A] px-5 py-3 text-white">
-            Log in
+    <main className="min-h-screen flex items-center justify-center p-4">
+      <div className="text-center space-y-4">
+        <h1 className="text-3xl font-bold">Welcome to Aligned</h1>
+        <p className="text-gray-600">Please sign in to access your dashboard.</p>
+        {session ? (
+          <Link href="/dashboard" className="px-4 py-2 bg-blue-600 text-white rounded">
+            Go to Dashboard
           </Link>
-        </div>
-        <p className="mt-10 text-sm text-slate-500">© {String(new Date().getFullYear())} Aligned</p>
+        ) : (
+          <Link href="/login" className="px-4 py-2 bg-blue-600 text-white rounded">
+            Sign in
+          </Link>
+        )}
       </div>
     </main>
   );
