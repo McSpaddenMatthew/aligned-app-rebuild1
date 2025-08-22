@@ -1,4 +1,4 @@
-// pages/login.tsx — magic-link only (no password), handles hash -> sets session -> /dashboard
+// pages/login.tsx — magic link only
 import type { GetServerSideProps } from "next";
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/router";
@@ -6,12 +6,9 @@ import { createPagesBrowserClient } from "@supabase/auth-helpers-nextjs";
 
 export const getServerSideProps: GetServerSideProps = async () => ({ props: {} });
 
-// Parse URL hash like: #access_token=...&refresh_token=...&type=recovery
 function getHashParams(): Record<string, string> {
   if (typeof window === "undefined") return {};
-  const raw = window.location.hash.startsWith("#")
-    ? window.location.hash.slice(1)
-    : window.location.hash;
+  const raw = window.location.hash.startsWith("#") ? window.location.hash.slice(1) : window.location.hash;
   const out: Record<string, string> = {};
   for (const part of raw.split("&")) {
     const [k, v] = part.split("=");
@@ -27,22 +24,33 @@ export default function Login() {
   const [msg, setMsg] = useState("");
   const [sending, setSending] = useState(false);
 
-  // If we came back from the magic link with tokens in the hash, set the session and go to /dashboard
   useEffect(() => {
-    const { access_token, refresh_token, error_description } = getHashParams();
-    if (error_description) {
-      setMsg(error_description);
-      history.replaceState(null, "", window.location.pathname);
-      return;
-    }
-    if (access_token && refresh_token) {
-      (async () => {
+    (async () => {
+      // Handle ?code=
+      const code = typeof window !== "undefined"
+        ? new URLSearchParams(window.location.search).get("code")
+        : null;
+      if (code) {
+        const { error } = await supabase.auth.exchangeCodeForSession({ code });
+        history.replaceState(null, "", window.location.pathname);
+        if (!error) {
+          router.replace("/dashboard");
+          return;
+        }
+      }
+      // Handle #access_token=
+      const { access_token, refresh_token, error_description } = getHashParams();
+      if (error_description) {
+        setMsg(error_description);
+        history.replaceState(null, "", window.location.pathname);
+        return;
+      }
+      if (access_token && refresh_token) {
         const { error } = await supabase.auth.setSession({ access_token, refresh_token });
-        history.replaceState(null, "", window.location.pathname); // clean hash to avoid loops
+        history.replaceState(null, "", window.location.pathname);
         if (!error) router.replace("/dashboard");
-        else setMsg(error.message);
-      })();
-    }
+      }
+    })();
   }, [supabase, router]);
 
   const onSubmit = async (e: React.FormEvent) => {
