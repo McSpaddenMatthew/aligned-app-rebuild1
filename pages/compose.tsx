@@ -1,6 +1,8 @@
+// pages/compose.tsx
 import { useMemo, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
+import type { GetServerSideProps } from "next";
 
 type Inputs = {
   candidateName?: string;
@@ -215,3 +217,8 @@ export default function Compose() {
     </div>
   );
 }
+
+// ⬇️ Force SSR so Next.js doesn't try to pre-render /compose at build time.
+export const getServerSideProps: GetServerSideProps = async () => {
+  return { props: {} };
+};
