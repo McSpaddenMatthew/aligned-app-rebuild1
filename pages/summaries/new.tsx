@@ -1,10 +1,10 @@
-import { GetServerSideProps } from "next";
+import React, { useEffect, useMemo, useRef, useState } from "react";
+import type { GetServerSideProps } from "next";
 import Head from "next/head";
-import { useEffect, useMemo, useRef, useState } from "react";
 import { createClient } from "@supabase/supabase-js";
 import type { Session } from "@supabase/supabase-js";
 
-// ---------- Auth (server) ----------
+/* -------------------- Auth (server) -------------------- */
 export const getServerSideProps: GetServerSideProps = async (ctx) => {
   const supabase = createClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL as string,
@@ -23,13 +23,13 @@ export const getServerSideProps: GetServerSideProps = async (ctx) => {
   return { props: { session } };
 };
 
-// ---------- UI (client) ----------
+/* -------------------- UI (client) -------------------- */
 type Props = { session: Session };
 
 export default function NewSummaryPage({ session }: Props) {
   const email = session.user.email ?? "Signed in";
 
-  // Four clear inputs matching your sticky note
+  // Four clear inputs matching your sketch
   const [hmNotes, setHmNotes] = useState("");
   const [resume, setResume] = useState("");
   const [callNotes, setCallNotes] = useState("");
@@ -42,7 +42,7 @@ export default function NewSummaryPage({ session }: Props) {
 
   const firstRef = useRef<HTMLTextAreaElement | null>(null);
 
-  // Keyboard shortcut: Cmd/Ctrl + Enter to generate
+  // Cmd/Ctrl + Enter to generate
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "enter") {
@@ -54,19 +54,19 @@ export default function NewSummaryPage({ session }: Props) {
     return () => window.removeEventListener("keydown", handler);
   });
 
-  const canGenerate = useMemo(() => {
-    // Require at least HM notes or candidate call notes
-    return (hmNotes.trim() || callNotes.trim()) && !loading;
-  }, [hmNotes, callNotes, loading]);
+  const canGenerate = useMemo(
+    () => (hmNotes.trim() || callNotes.trim()) && !loading,
+    [hmNotes, callNotes, loading]
+  );
 
-  // Combine into a single string for your existing API
+  // Combine to a single string for your existing API
   const combinedNotes = useMemo(() => {
-    const blocks: string[] = [];
-    if (hmNotes.trim()) blocks.push(`[Hiring Manager Notes]\n${hmNotes.trim()}`);
-    if (resume.trim()) blocks.push(`[Resume]\n${resume.trim()}`);
-    if (callNotes.trim()) blocks.push(`[Candidate Call]\n${callNotes.trim()}`);
-    if (jd.trim()) blocks.push(`[Job Description]\n${jd.trim()}`);
-    return blocks.join("\n\n");
+    const parts: string[] = [];
+    if (hmNotes.trim()) parts.push(`[Hiring Manager Notes]\n${hmNotes.trim()}`);
+    if (resume.trim()) parts.push(`[Resume]\n${resume.trim()}`);
+    if (callNotes.trim()) parts.push(`[Candidate Call]\n${callNotes.trim()}`);
+    if (jd.trim()) parts.push(`[Job Description]\n${jd.trim()}`);
+    return parts.join("\n\n");
   }, [hmNotes, resume, callNotes, jd]);
 
   const onGenerate = async () => {
@@ -80,10 +80,7 @@ export default function NewSummaryPage({ session }: Props) {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ notes: combinedNotes }),
       });
-      if (!res.ok) {
-        const t = await res.text();
-        throw new Error(t || `Request failed (${res.status})`);
-      }
+      if (!res.ok) throw new Error((await res.text()) || `Request failed (${res.status})`);
       const data = await res.json();
       setOutput(data.summary ?? "");
     } catch (err: any) {
@@ -125,7 +122,7 @@ export default function NewSummaryPage({ session }: Props) {
         <title>Aligned — New Summary</title>
       </Head>
 
-      {/* Slim black header */}
+      {/* Top bar */}
       <header className="w-full bg-black text-white">
         <div className="mx-auto flex max-w-7xl items-center justify-between px-6 py-3">
           <div className="flex items-center gap-2">
@@ -151,7 +148,7 @@ export default function NewSummaryPage({ session }: Props) {
 
       {/* Main */}
       <main className="mx-auto max-w-7xl px-6 py-10">
-        {/* Stepper — ultra clear */}
+        {/* Stepper */}
         <ol className="mb-6 grid grid-cols-1 gap-3 sm:grid-cols-4">
           {[
             { n: 1, label: "HM notes" },
@@ -168,7 +165,7 @@ export default function NewSummaryPage({ session }: Props) {
           ))}
         </ol>
 
-        {/* Controls row */}
+        {/* Controls */}
         <div className="mb-4 flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
           <div>
             <h1 className="text-2xl font-semibold tracking-tight">New Summary</h1>
@@ -199,7 +196,7 @@ export default function NewSummaryPage({ session }: Props) {
 
         {/* Grid */}
         <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-          {/* Left: Four stacked inputs */}
+          {/* Left: inputs */}
           <section className="space-y-5">
             <Field
               ref={firstRef}
@@ -234,7 +231,7 @@ export default function NewSummaryPage({ session }: Props) {
             />
           </section>
 
-          {/* Right: Output card */}
+          {/* Right: output */}
           <section className="rounded-2xl border bg-white shadow-sm">
             <div className="border-b px-5 py-4">
               <h2 className="text-lg font-semibold">Summary (copy & paste)</h2>
@@ -278,7 +275,7 @@ export default function NewSummaryPage({ session }: Props) {
   );
 }
 
-/** A tidy textarea field with step badge */
+/* -------- Reusable field component (needs React import) -------- */
 type FieldProps = {
   step: number;
   title: string;
@@ -315,3 +312,4 @@ const Field = React.forwardRef<HTMLTextAreaElement, FieldProps>(function Field(
     </div>
   );
 });
+
