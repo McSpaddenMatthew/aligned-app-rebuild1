@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
-import { createClient } from "@supabase/supabase-js";
 import { useRouter } from "next/router";
+import { createClient } from "@supabase/supabase-js";
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -13,37 +13,42 @@ export default function LoginPage() {
   const [sending, setSending] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
 
-  // Handle magic link return for both patterns:
-  // 1) /login?code=xyz
-  // 2) /login#access_token=...
+  // Handle magic link return for both ?code= and #access_token
   useEffect(() => {
-    const run = async () => {
-      // Hash flow (#access_token=...)
+    const handleMagicLink = async () => {
+      // Case 1: Hash flow (#access_token=...)
       if (typeof window !== "undefined" && window.location.hash.includes("access_token")) {
         const { data, error } = await supabase.auth.getSessionFromUrl({ storeSession: true });
-        if (!error && data?.session) return router.replace("/summaries/new");
+        if (!error && data?.session) {
+          router.replace("/summaries/new");
+        }
       }
 
-      // Query flow (?code=...)
+      // Case 2: Query flow (?code=...)
       if (router.isReady && router.query.code) {
         const code = String(router.query.code);
         const { data, error } = await supabase.auth.exchangeCodeForSession(code);
-        if (!error && data?.session) return router.replace("/summaries/new");
+        if (!error && data?.session) {
+          router.replace("/summaries/new");
+        }
       }
     };
-    run();
+    handleMagicLink();
   }, [router]);
 
   const sendMagicLink = async (e: React.FormEvent) => {
     e.preventDefault();
     setSending(true);
     setMessage(null);
+
     const { error } = await supabase.auth.signInWithOtp({
       email,
       options: {
+        // IMPORTANT: ensure redirect goes to /login
         emailRedirectTo: `${window.location.origin}/login`,
       },
     });
+
     setSending(false);
     setMessage(error ? error.message : "Check your email for a magic link.");
   };
