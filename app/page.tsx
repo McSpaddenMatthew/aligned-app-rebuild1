@@ -13,7 +13,18 @@ const supabase = createClient(
 export default function HomePage() {
   const router = useRouter();
 
-  // Catch magic link hash and redirect
+  // If user already has a session, skip homepage → /summaries/new
+  useEffect(() => {
+    const checkSession = async () => {
+      const { data } = await supabase.auth.getSession();
+      if (data?.session) {
+        router.replace("/summaries/new");
+      }
+    };
+    checkSession();
+  }, [router]);
+
+  // Catch magic link (#access_token) and redirect
   useEffect(() => {
     const handleHash = async () => {
       if (typeof window !== "undefined" && window.location.hash.includes("access_token")) {
@@ -27,113 +38,76 @@ export default function HomePage() {
   }, [router]);
 
   return (
-    <main className="mx-auto max-w-5xl px-6">
-      {/* HERO */}
-      <section className="text-center py-20">
-        <p className="mb-4 inline-block rounded-full bg-slate-100 px-4 py-1 text-sm text-slate-600">
-          Built for recruiters. Trusted by hiring managers.
-        </p>
-        <h1 className="text-5xl font-bold mb-6 leading-tight">
-          Hiring decisions need evidence. <br />
-          Recruiters need trust. Meet the bridge.
-        </h1>
-        <p className="text-lg text-slate-600 mb-8 max-w-2xl mx-auto">
-          Aligned turns messy inputs into decision-ready reports that hiring managers trust.
-        </p>
-        <div className="flex justify-center gap-4">
-          <Link href="/login">
-            <button className="rounded-xl bg-black px-6 py-3 text-white font-medium">
-              Log in
+    <main className="mx-auto max-w-6xl px-6">
+      {/* HERO SECTION */}
+      <section className="grid md:grid-cols-2 gap-12 py-20 items-center">
+        <div>
+          <p className="mb-4 inline-block rounded-full bg-slate-100 px-4 py-1 text-sm text-slate-600">
+            Evidence-based. PE-backed. Risk-reducing.
+          </p>
+          <h1 className="text-5xl font-bold mb-6 leading-tight">
+            Data-backed hiring decisions. <br />
+            Lower mis-hire risk.
+          </h1>
+          <p className="text-lg text-slate-600 mb-8">
+            Portfolio companies succeed when they hire leaders who deliver value from day one.
+            Aligned turns intake notes into <strong>quantified scorecards</strong> and{" "}
+            <strong>evidence-backed memos</strong> — so operating partners gain confidence, reduce
+            risk, and accelerate growth.
+          </p>
+          <p className="italic text-slate-500 mb-8">
+            Because hiring decisions should be based on evidence, not opinion.
+          </p>
+          <div className="flex gap-4">
+            <Link href="/login">
+              <button className="rounded-xl bg-black px-6 py-3 text-white font-medium">
+                Log in
+              </button>
+            </Link>
+            <Link href="#how-it-works">
+              <button className="rounded-xl border px-6 py-3 text-slate-800 font-medium">
+                See How It Works
+              </button>
+            </Link>
+          </div>
+        </div>
+
+        {/* PREVIEW CARD */}
+        <div className="border rounded-2xl p-6 bg-white shadow-sm">
+          <h2 className="text-sm font-semibold mb-4 text-slate-500">
+            QUANTIFIED & TRANSPARENT MEMO
+          </h2>
+          <ul className="space-y-3 text-slate-700 text-sm">
+            <li>
+              <span className="font-semibold">Priority → Evidence (auto-extracted)</span>
+            </li>
+            <li>
+              • Priority: 90-day BI rebuild → Outcome: 60-day dashboard delivery
+            </li>
+            <li>
+              • Priority: Modern stack → Tools: Airflow, dbt, Snowflake, Looker (−28% cost)
+            </li>
+            <li>
+              • Priority: Exec presence → Method: Decision → Evidence → Trade-off framing
+            </li>
+          </ul>
+          <div className="flex gap-4 mt-6">
+            <button className="rounded-lg bg-green-100 px-4 py-2 text-green-700 text-sm">
+              Quantified fit scorecard
             </button>
-          </Link>
-          <Link href="#how-it-works">
-            <button className="rounded-xl border px-6 py-3 text-slate-800 font-medium">
-              See How It Works
+            <button className="rounded-lg bg-orange-100 px-4 py-2 text-orange-700 text-sm">
+              Transparent risks & mitigations
             </button>
-          </Link>
-        </div>
-      </section>
-
-      {/* WHY ALIGNED EXISTS */}
-      <section id="the-problem" className="py-20 border-t">
-        <h2 className="text-3xl font-semibold mb-6 text-center">
-          Recruiters speak candidate. Hiring managers speak business. We translate.
-        </h2>
-        <p className="text-lg text-slate-600 max-w-3xl mx-auto text-center">
-          The trust gap is real: recruiters push resumes, hiring managers want proof. Aligned bridges the gap by turning hiring manager priorities into the lens every candidate is judged against.
-          The result? Reports that speak the hiring manager’s language — and make recruiters instantly credible.
-        </p>
-      </section>
-
-      {/* HOW IT WORKS */}
-      <section id="how-it-works" className="py-20 border-t">
-        <h2 className="text-3xl font-semibold mb-12 text-center">How It Works</h2>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-8 text-center">
-          <div>
-            <h3 className="text-xl font-semibold mb-2">Step 1: Start with Evidence</h3>
-            <p className="text-slate-600">
-              Everything begins with the hiring manager’s words. Add candidate notes + resume for context.
-            </p>
           </div>
-          <div>
-            <h3 className="text-xl font-semibold mb-2">Step 2: From Words to Decisions</h3>
-            <p className="text-slate-600">
-              Your hiring manager’s priorities become the frame every candidate is judged against.
-            </p>
-          </div>
-          <div>
-            <h3 className="text-xl font-semibold mb-2">Step 3: Deliver with Confidence</h3>
-            <p className="text-slate-600">
-              Drop your Aligned report straight into the hiring manager’s inbox.
-            </p>
+          <div className="flex gap-4 mt-6">
+            <button className="rounded-xl border px-4 py-2 text-sm text-slate-700">
+              Copy Link
+            </button>
+            <button className="rounded-xl border px-4 py-2 text-sm text-slate-700">
+              Export PDF
+            </button>
           </div>
         </div>
-      </section>
-
-      {/* WHY HIRING MANAGERS CARE */}
-      <section className="py-20 border-t">
-        <h2 className="text-3xl font-semibold mb-6 text-center">From meetings to meaning</h2>
-        <p className="text-lg text-slate-600 max-w-3xl mx-auto text-center">
-          Recruiters stop pitching. You get your words back — organized, weighted, and decision-ready.
-        </p>
-      </section>
-
-      {/* WHY RECRUITERS WIN */}
-      <section className="py-20 border-t">
-        <h2 className="text-3xl font-semibold mb-6 text-center">From ignored to indispensable</h2>
-        <ul className="text-lg text-slate-700 max-w-xl mx-auto space-y-2 list-disc list-inside">
-          <li>Instant authority</li>
-          <li>Faster cycles</li>
-          <li>Premium edge</li>
-        </ul>
-      </section>
-
-      {/* PROOF / CREDIBILITY */}
-      <section id="proof" className="py-20 border-t">
-        <h2 className="text-3xl font-semibold mb-6 text-center">The cost of mis-hires? Millions.</h2>
-        <ul className="text-lg text-slate-700 max-w-xl mx-auto space-y-2 list-disc list-inside">
-          <li>Built on executive trust principles</li>
-          <li>Every report starts with hiring manager evidence</li>
-          <li>Designed to prevent costly mis-hires</li>
-        </ul>
-      </section>
-
-      {/* SOCIAL PROOF / LOGOS */}
-      <section className="py-20 border-t text-center">
-        <h2 className="text-3xl font-semibold mb-4">
-          Aligned is already powering executive hires in healthcare & finance.
-        </h2>
-        <p className="text-lg text-slate-600 mb-8">
-          We built Aligned first for Weld Recruiting — the trusted partner behind successful placements at:
-        </p>
-        <div className="flex justify-center gap-8 grayscale opacity-80">
-          <div className="h-12 w-32 bg-slate-200 rounded" />
-          <div className="h-12 w-32 bg-slate-200 rounded" />
-          <div className="h-12 w-32 bg-slate-200 rounded" />
-        </div>
-        <p className="text-sm text-slate-500 mt-6">
-          Logos represent companies served by Weld Recruiting using Aligned as part of our process.
-        </p>
       </section>
     </main>
   );

@@ -21,7 +21,7 @@ export default function LoginPage() {
           storeSession: true,
         });
         if (!error && data?.session) {
-          router.replace("/summaries/new"); // 🚀 always go to summaries
+          router.replace("/summaries/new"); // 🚀 force redirect
         }
       }
     };
@@ -67,4 +67,5 @@ export default function LoginPage() {
     </div>
   );
 }
+
 
