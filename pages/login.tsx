@@ -10,72 +10,61 @@ const supabase = createClient(
 export default function LoginPage() {
   const router = useRouter();
   const [email, setEmail] = useState("");
-  const [sending, setSending] = useState(false);
-  const [message, setMessage] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [message, setMessage] = useState("");
 
-  // Handle magic link return for both ?code= and #access_token
+  // Handle magic link callback
   useEffect(() => {
     const handleMagicLink = async () => {
-      // Case 1: Hash flow (#access_token=...)
-      if (typeof window !== "undefined" && window.location.hash.includes("access_token")) {
-        const { data, error } = await supabase.auth.getSessionFromUrl({ storeSession: true });
+      if (window.location.hash.includes("access_token")) {
+        const { data, error } = await supabase.auth.getSessionFromUrl({
+          storeSession: true,
+        });
         if (!error && data?.session) {
-          router.replace("/summaries/new");
-        }
-      }
-
-      // Case 2: Query flow (?code=...)
-      if (router.isReady && router.query.code) {
-        const code = String(router.query.code);
-        const { data, error } = await supabase.auth.exchangeCodeForSession(code);
-        if (!error && data?.session) {
-          router.replace("/summaries/new");
+          router.replace("/summaries/new"); // 🚀 always go to summaries
         }
       }
     };
     handleMagicLink();
   }, [router]);
 
-  const sendMagicLink = async (e: React.FormEvent) => {
+  const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
-    setSending(true);
-    setMessage(null);
-
+    setLoading(true);
+    setMessage("");
     const { error } = await supabase.auth.signInWithOtp({
       email,
-      options: {
-        // IMPORTANT: ensure redirect goes to /login
-        emailRedirectTo: `${window.location.origin}/login`,
-      },
+      options: { emailRedirectTo: window.location.origin + "/login" },
     });
-
-    setSending(false);
-    setMessage(error ? error.message : "Check your email for a magic link.");
+    if (error) setMessage(error.message);
+    else setMessage("Check your email for a magic link.");
+    setLoading(false);
   };
 
   return (
-    <main className="mx-auto max-w-md px-6 py-16">
-      <h1 className="text-3xl font-semibold mb-2">Log in</h1>
-      <p className="text-slate-600 mb-6">We’ll email you a magic link.</p>
-      <form onSubmit={sendMagicLink} className="space-y-4">
-        <input
-          type="email"
-          required
-          value={email}
-          onChange={(e) => setEmail(e.target.value)}
-          placeholder="you@company.com"
-          className="w-full rounded-xl border px-4 py-3"
-        />
-        <button
-          type="submit"
-          disabled={sending}
-          className="w-full rounded-xl px-4 py-3 bg-black text-white"
-        >
-          {sending ? "Sending…" : "Send magic link"}
-        </button>
-      </form>
-      {message && <p className="mt-4 text-sm">{message}</p>}
-    </main>
+    <div className="min-h-screen flex items-center justify-center bg-gray-50">
+      <div className="max-w-md w-full p-8 bg-white shadow rounded">
+        <h1 className="text-2xl font-bold mb-6">Log in</h1>
+        <form onSubmit={handleLogin} className="space-y-4">
+          <input
+            type="email"
+            required
+            placeholder="Your email"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            className="w-full border px-3 py-2 rounded"
+          />
+          <button
+            type="submit"
+            disabled={loading}
+            className="w-full bg-black text-white py-2 rounded"
+          >
+            {loading ? "Sending..." : "Send magic link"}
+          </button>
+        </form>
+        {message && <p className="mt-4 text-sm text-gray-600">{message}</p>}
+      </div>
+    </div>
   );
 }
 
