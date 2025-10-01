@@ -1,36 +1,27 @@
-import { cookies } from "next/headers";
-import { createServerClient } from "@supabase/ssr";
-import { redirect } from "next/navigation";
+"use client";
 
-export default async function NewSummaryPage() {
-  const cookieStore = cookies();
+import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
+import { createClient } from "@supabase/supabase-js";
 
-  const supabase = createServerClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-    {
-      cookies: {
-        get(name: string) {
-          return cookieStore.get(name)?.value;
-        },
-        set(name: string, value: string, options: any) {
-          cookieStore.set({ name, value, ...options });
-        },
-        remove(name: string, options: any) {
-          cookieStore.set({ name, value: "", ...options });
-        },
-      },
-    }
-  );
+const supabase = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+);
 
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) redirect("/login");
+export default function NewSummaryPage() {
+  const [loading, setLoading] = useState(true);
+  const router = useRouter();
 
-  return (
-    <main className="p-6">
-      <h1 className="text-2xl font-semibold mb-4">New Candidate Summary</h1>
-      {/* your form/UI */}
-    </main>
-  );
+  useEffect(() => {
+    supabase.auth.getUser().then(({ data: { user } }) => {
+      if (!user) router.push("/login");
+      else setLoading(false);
+    });
+  }, [router]);
+
+  if (loading) return <p>Loading...</p>;
+
+  return <h1>New Candidate Summary</h1>;
 }
 
