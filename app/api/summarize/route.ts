@@ -1,54 +1,36 @@
-// app/api/summarize/route.ts
-import OpenAI from "openai";
+// app/api/summaries/route.ts
+import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
+import { createRouteHandlerClient } from "@supabase/auth-helpers-nextjs";
 
-export const runtime = "nodejs"; // ensure Node runtime (OpenAI SDK is Node-targeted)
+export async function GET() {
+  const supabase = createRouteHandlerClient({ cookies });
+  const { data: { session } } = await supabase.auth.getSession();
+  if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-/**
- * POST /api/summarize
- * Body: { text: string }
- */
-export async function POST(req: Request) {
-  try {
-    const { text } = await req.json();
+  const { data, error } = await supabase
+    .from("summaries")
+    .select("id, title, created_at")
+    .order("created_at", { ascending: false });
 
-    const apiKey = process.env.OPENAI_API_KEY;
-    if (!apiKey) {
-      return NextResponse.json(
-        { error: "Missing OPENAI_API_KEY" },
-        { status: 500 }
-      );
-    }
-
-    // Create the client inside the handler so it doesn't run at build time
-    const client = new OpenAI({ apiKey });
-
-    // ---- Replace this with your actual call/params ----
-    // Example using Responses API (compatible with latest SDKs)
-    const response = await client.responses.create({
-      model: "gpt-4o-mini",
-      input: [
-        {
-          role: "user",
-          content: [
-            { type: "text", text: `Summarize succinctly:\n\n${text}` },
-          ],
-        },
-      ],
-    });
-
-    // Pull text safely
-    const output =
-      (response.output_text ?? "").trim() ||
-      "No summary generated.";
-
-    return NextResponse.json({ summary: output });
-  } catch (err: any) {
-    console.error("Summarize route error:", err);
-    return NextResponse.json(
-      { error: "Failed to summarize." },
-      { status: 500 }
-    );
-  }
+  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  return NextResponse.json({ summaries: data ?? [] });
 }
 
+export async function POST(req: Request) {
+  const supabase = createRouteHandlerClient({ cookies });
+  const { data: { session } } = await supabase.auth.getSession();
+  if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
+  const { title, body } = (await req.json()) as { title?: string; body?: string };
+  if (!title?.trim()) {
+    return NextResponse.json({ error: "Title is required" }, { status: 400 });
+  }
+
+  const { error } = await supabase
+    .from("summaries")
+    .insert({ title: title.trim(), body: body ?? "", user_id: session.user.id }); // trigger also handles user_id
+
+  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  return NextResponse.json({ ok: true }, { status: 201 });
+}
