@@ -10,8 +10,8 @@ const supabase = createClient(
 );
 
 export default function NewSummaryPage() {
-  const [loading, setLoading] = useState(true);
   const router = useRouter();
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     supabase.auth.getUser().then(({ data: { user } }) => {
@@ -20,8 +20,13 @@ export default function NewSummaryPage() {
     });
   }, [router]);
 
-  if (loading) return <p>Loading...</p>;
+  if (loading) return <main className="p-6"><p>Loading…</p></main>;
 
-  return <h1>New Candidate Summary</h1>;
+  return (
+    <main className="p-6">
+      <h1 className="text-2xl font-semibold mb-4">New Candidate Summary</h1>
+      {/* your form/UI here */}
+    </main>
+  );
 }
 
