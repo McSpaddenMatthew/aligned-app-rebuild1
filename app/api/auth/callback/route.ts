@@ -1,4 +1,3 @@
-// app/api/auth/callback/route.ts
 import { NextResponse } from "next/server";
 import { cookies } from "next/headers";
 import { createRouteHandlerClient } from "@supabase/auth-helpers-nextjs";
@@ -13,7 +12,6 @@ export async function GET(req: Request) {
     return NextResponse.redirect(`${origin}/login?error=missing_code`);
   }
 
-  // Supabase helper will use Next.js cookies API to set auth cookies
   const supabase = createRouteHandlerClient({ cookies });
 
   const { error } = await supabase.auth.exchangeCodeForSession(code);
@@ -24,6 +22,6 @@ export async function GET(req: Request) {
     );
   }
 
-  // ✅ Cookie is now set; user is authenticated
+  // ✅ session cookie is now set server-side
   return NextResponse.redirect(`${origin}${next}`);
 }

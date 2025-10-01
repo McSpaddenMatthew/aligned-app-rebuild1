@@ -1,30 +1,37 @@
-export default function DashboardHome() {
+import { cookies } from "next/headers";
+import { redirect } from "next/navigation";
+import { createServerComponentClient } from "@supabase/auth-helpers-nextjs";
+
+export default async function DashboardPage() {
+  const supabase = createServerComponentClient({ cookies });
+  const {
+    data: { session },
+  } = await supabase.auth.getSession();
+
+  // If no session, bounce to login
+  if (!session) {
+    redirect("/login");
+  }
+
+  // Example user info
+  const userEmail = session.user.email;
+
   return (
-    <div className="space-y-6">
-      <div className="card p-6">
-        <h1 className="text-xl font-semibold mb-2">Welcome back</h1>
-        <p className="text-[var(--slate)]">Your summaries, activity, and quick actions live here.</p>
-      </div>
+    <main className="mx-auto max-w-3xl py-12 px-6">
+      <h1 className="text-4xl font-bold mb-4">Dashboard</h1>
+      <p className="text-lg text-slate-700">
+        Welcome back, <span className="font-semibold">{userEmail}</span> 🎉
+      </p>
 
-      <div className="grid md:grid-cols-3 gap-4">
-        <a href="/dashboard/new" className="card p-5 hover:shadow-md transition">
-          <div className="font-semibold mb-1">Create a summary</div>
-          <div className="text-sm text-[var(--slate)]">Start a new candidate report</div>
-        </a>
-        <a href="/dashboard/summaries" className="card p-5 hover:shadow-md transition">
-          <div className="font-semibold mb-1">Recent submissions</div>
-          <div className="text-sm text-[var(--slate)]">Review what’s new</div>
-        </a>
-        <a href="/dashboard/summaries" className="card p-5 hover:shadow-md transition">
-          <div className="font-semibold mb-1">Share a report</div>
-          <div className="text-sm text-[var(--slate)]">Send to a hiring manager</div>
-        </a>
-      </div>
-
-      <div className="card p-6">
-        <h2 className="font-semibold mb-2">Today</h2>
-        <div className="text-sm text-[var(--slate)]">No scheduled tasks yet.</div>
-      </div>
-    </div>
+      <section className="mt-8 space-y-4">
+        <p>This is your private dashboard area.</p>
+        <ul className="list-disc list-inside text-slate-600">
+          <li>✅ Protected content goes here</li>
+          <li>📊 Candidate summaries</li>
+          <li>⚙️ Settings</li>
+        </ul>
+      </section>
+    </main>
   );
 }
+

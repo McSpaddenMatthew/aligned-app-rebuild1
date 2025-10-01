@@ -1,105 +1,110 @@
-import { NextRequest } from "next/server";
+// app/api/generate-summary/route.ts
+import { NextRequest, NextResponse } from "next/server";
 
-export const runtime = "nodejs";
-
-const MODEL = process.env.OPENAI_MODEL || "gpt-4o-mini";
-const OPENAI_API_KEY = process.env.OPENAI_API_KEY || "";
-const OPENAI_TIMEOUT_MS = Number(process.env.OPENAI_TIMEOUT_MS || 60000);
+const MODEL = process.env.OPENAI_MODEL ?? "gpt-4o-mini"; // or "gpt-4o" if you prefer
 
 export async function POST(req: NextRequest) {
-  if (!OPENAI_API_KEY) {
-    return new Response(JSON.stringify({ error: "Missing OPENAI_API_KEY" }), {
-      status: 500,
-    });
-  }
-
   try {
-    const {
-      hiringManagerNotes,
-      candidateNotes,
-      candidateResume,
-      roleTitle,
-      company,
-    } = await req.json();
+    const { title, step1, step2, step3, step4, step5 } = await req.json();
 
-    if (!hiringManagerNotes?.trim() || !candidateNotes?.trim()) {
-      return new Response(
-        JSON.stringify({
-          error: "hiringManagerNotes and candidateNotes are required.",
-        }),
-        { status: 400 }
+    if (!process.env.OPENAI_API_KEY) {
+      return NextResponse.json(
+        { error: "Missing OPENAI_API_KEY on the server." },
+        { status: 500 }
       );
     }
 
-    const system =
-      "Generate decision-ready 'Aligned' reports for executive hiring managers. Be concise, credible, and honest. Use the exact section order provided. Prefer hiring manager evidence over resume claims.";
+    // Build a concise, deterministic prompt
+    const system = [
+      "You are an expert executive recruiter.",
+      "Write a crisp, email-ready candidate summary for a hiring manager.",
+      "Prefer clear bullets over long paragraphs. Keep it under ~300 words.",
+      "Never invent facts not present in the sources.",
+    ].join(" ");
 
-    const userPrompt = `You are creating an Aligned candidate report for ${
-      roleTitle || "the target role"
-    } at ${company || "the company"}.
+    const user = `
+Title: ${title || "Candidate Summary"}
 
-=== Hiring Manager Evidence (verbatim/notes) ===
-${hiringManagerNotes}
+Sources, in priority order:
+1) Hiring Manager Call (notes/transcript):
+${step1 || "(none)"}
 
-=== Candidate Notes ===
-${candidateNotes}
+2) Resume:
+${step2 || "(none)"}
 
-=== Candidate Resume (if relevant) ===
-${candidateResume || "(none provided)"}
+3) Candidate Call (transcript/notes):
+${step3 || "(none)"}
 
-Now produce the report in this exact order and with these exact headings:
+4) Job Description:
+${step4 || "(none)"}
 
-1) Candidate header (name if known or "Candidate", current title, location, industry fit)
-2) What You Shared – What the Candidate Brings (2-column markdown table; 4–6 rows; left = HM priorities with short quotes, right = candidate evidence. If paraphrasing, label [paraphrase].)
-3) Why This Candidate Was Selected (2–4 sentences)
-4) Known Risks & Mitigations (3–5 bullets; frank but fair)
-5) Outcomes Delivered (4–6 bullets; measurable when possible)
-6) How Candidate Frames Data for Leadership Decisions (3–5 bullets tied to business outcomes)
-7) Resume Note + Scheduling Line (1–2 sentences + CTA)
+5) Optional Intel (org/company/role):
+${step5 || "(none)"}
 
-Rules:
-- ~500–800 words total
-- No fabrications; say “not specified” if unknown
-- Prefer numbers/specifics; clean markdown.`;
+Output format (exactly):
+- A bold title on first line (use the Title above).
+- Then these sections as short bullets:
+  1) What You Shared — What the Candidate Brings (include quotes if present)
+  2) Why This Candidate Was Selected
+  3) Known Risks & Mitigations
+  4) Outcomes Delivered
+  5) How [Name] Frames Data for Leadership Decisions
+  6) Next Steps + scheduling line
+Keep it actionable, factual, and non-redundant. Do not include any meta commentary about the process.
+`.trim();
 
-    const controller = new AbortController();
-    const t = setTimeout(() => controller.abort(), OPENAI_TIMEOUT_MS);
-
-    const rsp = await fetch("https://api.openai.com/v1/chat/completions", {
+    // Call OpenAI (Responses API style)
+    const completion = await fetch("https://api.openai.com/v1/chat/completions", {
       method: "POST",
-      signal: controller.signal,
       headers: {
-        Authorization: `Bearer ${OPENAI_API_KEY}`,
+        "Authorization": `Bearer ${process.env.OPENAI_API_KEY}`,
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
         model: MODEL,
-        temperature: 0.3,
         messages: [
           { role: "system", content: system },
-          { role: "user", content: userPrompt },
+          { role: "user", content: user },
         ],
+        temperature: 0.2,
       }),
-    }).finally(() => clearTimeout(t));
+    });
 
-    if (!rsp.ok) {
-      const err = await rsp.text();
-      return new Response(
-        JSON.stringify({ error: `OpenAI error: ${err}` }),
-        { status: rsp.status }
+    if (!completion.ok) {
+      const errText = await completion.text();
+      return NextResponse.json(
+        { error: `OpenAI error: ${errText}` },
+        { status: 500 }
       );
     }
 
-    const data = await rsp.json();
-    const summary = data?.choices?.[0]?.message?.content || "";
+    const data = await completion.json();
+    const text: string =
+      data.choices?.[0]?.message?.content?.trim() ||
+      "No content returned from the model.";
 
-    return new Response(JSON.stringify({ summary }), { status: 200 });
-  } catch (e) {
-    console.error(e);
-    return new Response(
-      JSON.stringify({ error: "Unexpected server error." }),
-      { status: 500 }
-    );
+    // Return both plain text and a minimal HTML version for preview
+    const html = text
+      .split("\n")
+      .map((line: string) => {
+        if (/^\s*[-–•]\s+/.test(line)) return `<li>${escapeHtml(line.replace(/^\s*[-–•]\s+/, ""))}</li>`;
+        if (/^\s*\d+\)\s+/.test(line)) return `<li>${escapeHtml(line.replace(/^\s*\d+\)\s+/, ""))}</li>`;
+        if (/^\*\*(.+)\*\*/.test(line)) {
+          return `<p><strong>${escapeHtml(line.replace(/^\*\*(.+)\*\*.*/, "$1"))}</strong></p>`;
+        }
+        return `<p>${escapeHtml(line)}</p>`;
+      })
+      .join("")
+      // wrap any standalone LI's in UL
+      .replace(/(?:^|<\/p>)(<li>.*?<\/li>)(?=<p>|$)/gs, "<ul>$1</ul>");
+
+    return NextResponse.json({ text, html });
+  } catch (err: any) {
+    return NextResponse.json({ error: err?.message || "Unknown error." }, { status: 500 });
   }
+}
+
+function escapeHtml(s: string) {
+  return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 }
 
