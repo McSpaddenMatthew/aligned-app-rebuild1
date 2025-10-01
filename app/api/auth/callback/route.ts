@@ -1,27 +1,36 @@
-import { NextResponse } from "next/server";
+import { NextResponse, NextRequest } from "next/server";
+import { createServerClient } from "@supabase/ssr";
 import { cookies } from "next/headers";
-import { createRouteHandlerClient } from "@supabase/auth-helpers-nextjs";
 
-export async function GET(req: Request) {
+export async function GET(req: NextRequest) {
   const url = new URL(req.url);
   const code = url.searchParams.get("code");
-  const next = url.searchParams.get("next") ?? "/summaries/new";
-  const origin = url.origin;
 
-  if (!code) {
-    return NextResponse.redirect(`${origin}/login?error=missing_code`);
+  const cookieStore = await cookies();
+
+  const supabase = createServerClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    {
+      cookies: {
+        get(name: string) {
+          return cookieStore.get(name)?.value;
+        },
+        set(name: string, value: string, options: any) {
+          cookieStore.set({ name, value, ...options });
+        },
+        remove(name: string, options: any) {
+          cookieStore.set({ name, value: "", ...options });
+        },
+      },
+    }
+  );
+
+  if (code) {
+    // Exchange the code for a session BEFORE you redirect anywhere
+    await supabase.auth.exchangeCodeForSession(code);
   }
 
-  const supabase = createRouteHandlerClient({ cookies });
-
-  const { error } = await supabase.auth.exchangeCodeForSession(code);
-
-  if (error) {
-    return NextResponse.redirect(
-      `${origin}/login?error=${encodeURIComponent(error.message)}`
-    );
-  }
-
-  // ✅ session cookie is now set server-side
-  return NextResponse.redirect(`${origin}${next}`);
+  // After a successful exchange, go straight to your post-login page
+  return NextResponse.redirect(new URL("/summaries/new", req.url));
 }

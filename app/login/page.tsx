@@ -10,53 +10,48 @@ const supabase = createClient(
 
 export default function LoginPage() {
   const [email, setEmail] = useState("");
-  const [status, setStatus] = useState<"idle" | "sending" | "sent" | "error">("idle");
+  const [sent, setSent] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-  async function sendMagicLink(e: React.FormEvent) {
+  async function sendLink(e: React.FormEvent) {
     e.preventDefault();
-    setStatus("sending");
-    const { error } = await supabase.auth.signInWithOtp({ email });
-    if (error) {
-      setStatus("error");
-      console.error(error.message);
-    } else {
-      setStatus("sent");
-    }
+    setError(null);
+    const SITE = process.env.NEXT_PUBLIC_SITE_URL!; // e.g. https://your-app.vercel.app
+    const { error } = await supabase.auth.signInWithOtp({
+      email,
+      options: {
+        emailRedirectTo: `${SITE}/auth/callback`,
+      },
+    });
+    if (error) setError(error.message);
+    else setSent(true);
   }
 
   return (
-    <div className="flex h-screen items-center justify-center bg-[#0A0A0A] text-white">
-      <div className="max-w-md w-full bg-[#1E1E1E] p-8 rounded-2xl shadow-lg">
-        <h1 className="text-3xl font-bold mb-6 text-center">Sign in to Aligned</h1>
-        <form onSubmit={sendMagicLink} className="space-y-4">
+    <main className="mx-auto max-w-md p-6">
+      <h1 className="text-2xl font-semibold mb-4">Log in</h1>
+      {sent ? (
+        <p>Check your email for a magic link.</p>
+      ) : (
+        <form onSubmit={sendLink} className="space-y-3">
           <input
             type="email"
-            placeholder="you@example.com"
+            required
             value={email}
             onChange={(e) => setEmail(e.target.value)}
-            className="w-full px-4 py-3 rounded-xl bg-[#0A0A0A] border border-gray-700 focus:outline-none focus:border-[#FF6B35]"
+            placeholder="you@example.com"
+            className="w-full rounded border px-3 py-2"
           />
           <button
             type="submit"
-            disabled={status === "sending"}
-            className="w-full py-3 bg-[#FF6B35] hover:bg-[#e65a29] rounded-xl font-semibold text-black transition"
+            className="w-full rounded px-3 py-2 border"
           >
-            {status === "sending" ? "Sending..." : "Send Magic Link"}
+            Send magic link
           </button>
+          {error && <p className="text-red-600 text-sm">{error}</p>}
         </form>
-        {status === "sent" && (
-          <p className="mt-4 text-green-400 text-center">
-            Magic link sent! Check your email.
-          </p>
-        )}
-        {status === "error" && (
-          <p className="mt-4 text-red-400 text-center">
-            Something went wrong. Try again.
-          </p>
-        )}
-      </div>
-    </div>
+      )}
+    </main>
   );
 }
-
 
