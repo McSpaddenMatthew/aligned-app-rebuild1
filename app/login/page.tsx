@@ -1,5 +1,4 @@
 "use client";
-
 import { useState } from "react";
 import { createClient } from "@supabase/supabase-js";
 
@@ -16,7 +15,6 @@ export default function LoginPage() {
 
   async function sendLink(e: React.FormEvent) {
     e.preventDefault();
-    if (!email) return;
     setError(null);
     setLoading(true);
 
@@ -33,7 +31,6 @@ export default function LoginPage() {
 
   return (
     <main className="min-h-screen bg-white text-[#0A0A0A]">
-      {/* Top bar to match homepage */}
       <div className="bg-[#F1F5F9] text-center text-sm py-2">
         AI-powered, evidence-first • White-glove first 3 reports • Built for PE portfolio hiring
       </div>
@@ -43,9 +40,7 @@ export default function LoginPage() {
           <h1 className="text-3xl font-bold tracking-tight text-center">
             Log in to <span className="text-[#0A1F44]">Aligned</span>
           </h1>
-          <p className="mt-2 text-center text-sm text-[#475569]">
-            Magic link only. No passwords.
-          </p>
+          <p className="mt-2 text-center text-sm text-[#475569]">Magic link only. No passwords.</p>
 
           <div className="mt-8 rounded-2xl border bg-white p-6 shadow-sm">
             {sent ? (
@@ -53,9 +48,6 @@ export default function LoginPage() {
                 <h2 className="text-lg font-semibold">Check your email</h2>
                 <p className="mt-2 text-sm text-[#475569]">
                   We sent a secure sign-in link to <span className="font-medium">{email}</span>.
-                </p>
-                <p className="mt-2 text-xs text-[#475569]">
-                  Didn’t get it? Check spam or try again below.
                 </p>
                 <button
                   onClick={() => setSent(false)}
@@ -78,11 +70,7 @@ export default function LoginPage() {
                   />
                 </label>
 
-                {error && (
-                  <p className="text-sm text-red-600">
-                    {error}
-                  </p>
-                )}
+                {error && <p className="text-sm text-red-600">{error}</p>}
 
                 <button
                   type="submit"
@@ -91,10 +79,6 @@ export default function LoginPage() {
                 >
                   {loading ? "Sending link…" : "Send magic link"}
                 </button>
-
-                <p className="text-xs text-[#475569]">
-                  By continuing, you agree to receive a one-time sign-in link via email.
-                </p>
               </form>
             )}
           </div>
