@@ -2,37 +2,44 @@
 
 import { useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { createClientComponentClient } from "@supabase/auth-helpers-nextjs";
+import { createClient } from "@supabase/supabase-js";
+
+const supabase = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+);
 
 export default function AuthCallbackPage() {
   const router = useRouter();
 
   useEffect(() => {
-    const handleAuth = async () => {
-      try {
-        const supabase = createClientComponentClient();
+    const handleCallback = async () => {
+      // Supabase looks for tokens in the URL hash (#access_token=…)
+      const { data, error } = await supabase.auth.getSession();
 
-        const { error } = await supabase.auth.exchangeCodeForSession();
+      if (error) {
+        console.error("Auth error:", error.message);
+        router.push("/login");
+        return;
+      }
 
-        if (error) {
-          console.error("Auth callback error:", error.message);
-          router.replace("/login");
-        } else {
-          router.replace("/summaries/new");
-        }
-      } catch (err) {
-        console.error("Unexpected auth error:", err);
-        router.replace("/login");
+      if (data?.session) {
+        // ✅ successful login → send them to summaries
+        router.push("/summaries/new");
+      } else {
+        // no session? back to login
+        router.push("/login");
       }
     };
 
-    handleAuth();
+    handleCallback();
   }, [router]);
 
   return (
-    <main className="flex min-h-screen items-center justify-center">
-      <p className="text-lg font-medium">Finishing login…</p>
-    </main>
+    <div style={{ padding: "2rem", textAlign: "center" }}>
+      <h2>Logging you in…</h2>
+    </div>
   );
 }
+
 
