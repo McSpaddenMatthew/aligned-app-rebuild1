@@ -9,13 +9,17 @@ export default function AuthCallbackPage() {
 
   useEffect(() => {
     (async () => {
+      // Exchanges ?code=... in the URL for a Supabase session (PKCE flow)
       const supabase = createClientComponentClient();
       const { error } = await supabase.auth.exchangeCodeForSession();
+
       if (error) {
         console.error("Auth callback error:", error.message);
         router.replace("/login");
         return;
       }
+
+      // Success → send to Build Summary
       router.replace("/summaries/new");
     })();
   }, [router]);
@@ -26,4 +30,3 @@ export default function AuthCallbackPage() {
     </main>
   );
 }
-
