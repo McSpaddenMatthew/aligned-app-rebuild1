@@ -1,102 +1,73 @@
-// pages/login.tsx — magic link only
-import type { GetServerSideProps } from "next";
-import { useEffect, useMemo, useState } from "react";
+// pages/login.tsx
+import { useMemo, useState } from "react";
+import Head from "next/head";
 import { useRouter } from "next/router";
+import Link from "next/link";
 import { createPagesBrowserClient } from "@supabase/auth-helpers-nextjs";
 
-export const getServerSideProps: GetServerSideProps = async () => ({ props: {} });
-
-function getHashParams(): Record<string, string> {
-  if (typeof window === "undefined") return {};
-  const raw = window.location.hash.startsWith("#") ? window.location.hash.slice(1) : window.location.hash;
-  const out: Record<string, string> = {};
-  for (const part of raw.split("&")) {
-    const [k, v] = part.split("=");
-    if (k) out[decodeURIComponent(k)] = decodeURIComponent(v || "");
-  }
-  return out;
-}
-
-export default function Login() {
+export default function LoginPage() {
   const supabase = useMemo(() => createPagesBrowserClient(), []);
-  const router = useRouter();
   const [email, setEmail] = useState("");
-  const [msg, setMsg] = useState("");
-  const [sending, setSending] = useState(false);
+  const [msg, setMsg] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  const router = useRouter();
 
-  useEffect(() => {
-    (async () => {
-      // Handle ?code=
-      const code = typeof window !== "undefined"
-        ? new URLSearchParams(window.location.search).get("code")
-        : null;
-      if (code) {
-        const { error } = await supabase.auth.exchangeCodeForSession({ code });
-        history.replaceState(null, "", window.location.pathname);
-        if (!error) {
-          router.replace("/dashboard");
-          return;
-        }
-      }
-      // Handle #access_token=
-      const { access_token, refresh_token, error_description } = getHashParams();
-      if (error_description) {
-        setMsg(error_description);
-        history.replaceState(null, "", window.location.pathname);
-        return;
-      }
-      if (access_token && refresh_token) {
-        const { error } = await supabase.auth.setSession({ access_token, refresh_token });
-        history.replaceState(null, "", window.location.pathname);
-        if (!error) router.replace("/dashboard");
-      }
-    })();
-  }, [supabase, router]);
-
-  const onSubmit = async (e: React.FormEvent) => {
+  async function sendLink(e: React.FormEvent) {
     e.preventDefault();
-    setMsg("");
-    setSending(true);
-    const { error } = await supabase.auth.signInWithOtp({
-      email,
-      options: {
-        emailRedirectTo:
-          (process.env.NEXT_PUBLIC_SITE_URL || window.location.origin) + "/login",
-      },
-    });
-    setSending(false);
-    setMsg(error ? error.message : "Check your email for the magic link.");
-  };
+    setBusy(true);
+    setMsg(null);
+    try {
+      const next = (router.query.next as string) || "/dashboard";
+      const { error } = await supabase.auth.signInWithOtp({
+        email: email.trim(),
+        options: {
+          emailRedirectTo: `${window.location.origin}/auth/callback?next=${encodeURIComponent(next)}`,
+        },
+      });
+      if (error) throw error;
+      setMsg("Check your email for the login link.");
+    } catch (err: any) {
+      setMsg(err.message || "Could not send link.");
+    } finally {
+      setBusy(false);
+    }
+  }
 
   return (
-    <main className="min-h-screen flex items-center justify-center p-6">
-      <div className="w-full max-w-md">
-        <h1 className="text-2xl font-semibold">Sign in</h1>
-        <p className="mt-2 text-slate-700">We’ll email you a magic link.</p>
+    <>
+      <Head><title>Login • Aligned</title></Head>
+      <main className="min-h-screen bg-white text-black">
+        <div className="mx-auto max-w-md px-4 py-16">
+          <h1 className="mb-6 text-2xl font-semibold">Sign in</h1>
+          <form onSubmit={sendLink} className="space-y-4">
+            <div>
+              <label className="mb-1 block text-sm">Email</label>
+              <input
+                type="email"
+                required
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                className="w-full rounded-xl border border-gray-300 px-3 py-2 outline-none focus:ring-2 focus:ring-[#FF6B35]"
+                placeholder="you@company.com"
+              />
+            </div>
+            <button
+              type="submit"
+              disabled={busy}
+              className="w-full rounded-2xl bg-[#0A0A0A] px-4 py-2 text-white transition hover:opacity-90 disabled:opacity-50"
+            >
+              {busy ? "Sending..." : "Send magic link"}
+            </button>
+            {msg && <p className="text-sm text-[#475569]">{msg}</p>}
+          </form>
 
-        <form onSubmit={onSubmit} className="mt-6 space-y-4" autoComplete="off">
-          <input
-            type="email"
-            inputMode="email"
-            autoComplete="username"
-            placeholder="you@company.com"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            required
-            className="w-full rounded border px-3 py-2"
-          />
-          <button
-            type="submit"
-            disabled={sending || !email}
-            className="w-full rounded bg-black px-4 py-2 text-white disabled:opacity-50"
-          >
-            {sending ? "Sending…" : "Send magic link"}
-          </button>
-        </form>
-
-        {msg && <p className="mt-4 text-sm text-slate-700">{msg}</p>}
-        <p className="mt-10 text-xs text-slate-500">© {String(new Date().getFullYear())} Aligned</p>
-      </div>
-    </main>
+          <div className="mt-6">
+            <Link href="/" className="text-sm underline">Back to Home</Link>
+          </div>
+        </div>
+      </main>
+    </>
   );
 }
+
+

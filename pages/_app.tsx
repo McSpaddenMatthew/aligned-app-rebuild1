@@ -1,6 +1,6 @@
 import type { AppProps } from "next/app";
-// If you don't have this file, delete the import line.
+import "../styles/globals.css";
 
-export default function App({ Component, pageProps }: AppProps) {
+export default function MyApp({ Component, pageProps }: AppProps) {
   return <Component {...pageProps} />;
 }
