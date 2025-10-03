@@ -1,12 +1,7 @@
-// app/login/page.tsx (client)
 "use client";
-import { useState } from "react";
-import { createClient } from "@supabase/supabase-js";
 
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-);
+import { useState } from "react";
+import { supabase } from "@/lib/supabaseClient";
 
 export default function LoginPage() {
   const [email, setEmail] = useState("");
@@ -26,27 +21,33 @@ export default function LoginPage() {
   }
 
   return (
-    <main className="mx-auto max-w-md p-6">
-      <h1 className="text-2xl font-semibold mb-4">Log in</h1>
-      {sent ? (
-        <p>Check your email for a magic link.</p>
-      ) : (
-        <form onSubmit={sendLink} className="space-y-3">
-          <input
-            type="email"
-            required
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            placeholder="you@example.com"
-            className="w-full rounded border px-3 py-2"
-          />
-          <button type="submit" className="w-full rounded px-3 py-2 border">
-            Send magic link
-          </button>
-          {error && <p className="text-red-600 text-sm">{error}</p>}
-        </form>
-      )}
-    </main>
+    <section className="max-w-md">
+      <h1 className="text-3xl font-semibold tracking-tight">Log in</h1>
+      <p className="mt-2 text-slate-600">
+        Magic link only. No passwords.
+      </p>
+
+      <div className="mt-6 rounded-2xl border p-4">
+        {sent ? (
+          <p>Check your email for a magic link.</p>
+        ) : (
+          <form onSubmit={sendLink} className="space-y-3">
+            <input
+              type="email"
+              required
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              placeholder="you@company.com"
+              className="w-full rounded-xl border px-3 py-2"
+            />
+            <button type="submit" className="w-full rounded-xl border px-3 py-2 hover:bg-slate-50">
+              Send magic link
+            </button>
+            {error && <p className="text-red-600 text-sm">{error}</p>}
+          </form>
+        )}
+      </div>
+    </section>
   );
 }
 

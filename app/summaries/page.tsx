@@ -1,108 +1,66 @@
-// app/summaries/page.tsx
-'use client'
+import { cookies } from "next/headers";
+import { createServerClient } from "@supabase/ssr";
+import Link from "next/link";
 
-import { useEffect, useState } from 'react'
-import { useRouter } from 'next/navigation'
-import { getSupabaseBrowser } from '../../lib/supabase-browser'
+export default async function SummariesPage() {
+  const cookieStore = cookies();
+  const supabase = createServerClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    { cookies: { get: (n) => cookieStore.get(n)?.value } }
+  );
 
-type Summary = {
-  id: string
-  title: string
-  body: string
-  created_at: string
-  user_id: string
-}
-
-export default function SummariesPage() {
-  const router = useRouter()
-  const supabase = getSupabaseBrowser()
-
-  const [loading, setLoading] = useState(true)
-  const [authed, setAuthed] = useState(false)
-  const [summaries, setSummaries] = useState<Summary[]>([])
-
-  async function load() {
-    const { data: { user } } = await supabase.auth.getUser()
-    if (!user) {
-      router.push('/login')
-      return
-    }
-    setAuthed(true)
-
-    const { data, error } = await supabase
-      .from('summaries')
-      .select('id,title,body,created_at,user_id')
-      .eq('user_id', user.id)
-      .order('created_at', { ascending: false })
-
-    if (!error && data) setSummaries(data as Summary[])
-    setLoading(false)
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) {
+    return (
+      <section>
+        <h1 className="text-3xl font-semibold tracking-tight">Your Summaries</h1>
+        <p className="mt-2 text-slate-600">Please <Link href="/login" className="underline">log in</Link> to view your data.</p>
+      </section>
+    );
   }
 
-  useEffect(() => {
-    load()
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
-
-  async function handleDelete(id: string) {
-    if (!confirm('Delete this summary?')) return
-    const { error } = await supabase.from('summaries').delete().eq('id', id)
-    if (error) {
-      alert(error.message)
-      return
-    }
-    // refresh list
-    setSummaries((prev) => prev.filter((s) => s.id !== id))
-  }
-
-  if (loading) return <div className="p-6">Loading summaries…</div>
-  if (!authed) return null
+  const { data: summaries } = await supabase
+    .from("summaries")
+    .select("id, title, created_at")
+    .eq("user_id", user.id)
+    .order("created_at", { ascending: false });
 
   return (
-    <div className="p-6 max-w-5xl mx-auto">
-      <div className="flex items-center justify-between mb-6">
-        <h1 className="text-2xl font-semibold">Your Candidate Summaries</h1>
-        <a href="/summaries/new" className="rounded-2xl border px-4 py-2">New Summary</a>
+    <section>
+      <div className="flex items-center justify-between">
+        <h1 className="text-3xl font-semibold tracking-tight">Your Summaries</h1>
+        <Link href="/summaries/new" className="rounded-xl border px-3 py-2 hover:bg-slate-50 text-sm">
+          + New
+        </Link>
       </div>
 
-      {summaries.length === 0 ? (
-        <p>No summaries yet. <a href="/summaries/new" className="underline">Create one</a>.</p>
-      ) : (
-        <ul className="space-y-4">
-          {summaries.map((s) => (
-            <li key={s.id} className="border rounded-xl p-4 hover:bg-gray-50">
-              <div className="flex justify-between items-start gap-3">
-                <div className="min-w-0">
-                  <div className="flex items-center gap-2">
-                    <h2 className="font-medium truncate">{s.title}</h2>
-                    <span className="text-xs opacity-70">
-                      {new Date(s.created_at).toLocaleString()}
-                    </span>
-                  </div>
-                  <pre className="whitespace-pre-wrap mt-2 text-sm">
-                    {s.body.length > 300 ? s.body.slice(0, 300) + '…' : s.body}
-                  </pre>
-                </div>
-                <div className="shrink-0 flex gap-2">
-                  <a
-                    href={`/summaries/${s.id}/edit`}
-                    className="rounded-xl border px-3 py-1 text-sm"
-                  >
-                    Edit
-                  </a>
-                  <button
-                    onClick={() => handleDelete(s.id)}
-                    className="rounded-xl border px-3 py-1 text-sm"
-                  >
-                    Delete
-                  </button>
-                </div>
+      <ul className="mt-6 grid gap-3">
+        {summaries?.length ? summaries.map((s) => (
+          <li key={s.id} className="rounded-2xl border p-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <Link href={`/summaries/${s.id}`} className="font-medium hover:underline">
+                  {s.title || "Untitled"}
+                </Link>
+                <div className="text-xs text-slate-500">{new Date(s.created_at).toLocaleString()}</div>
               </div>
-            </li>
-          ))}
-        </ul>
-      )}
-    </div>
-  )
+              <Link
+                href={`/summaries/${s.id}`}
+                className="text-sm rounded-xl border px-3 py-1.5 hover:bg-slate-50"
+              >
+                Open
+              </Link>
+            </div>
+          </li>
+        )) : (
+          <li className="rounded-2xl border p-4 text-slate-600">
+            No summaries yet. <Link className="underline" href="/summaries/new">Create your first.</Link>
+          </li>
+        )}
+      </ul>
+    </section>
+  );
 }
+
 
