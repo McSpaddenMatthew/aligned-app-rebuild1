@@ -12,14 +12,13 @@ export default function AuthCallbackPage() {
       try {
         const supabase = createClientComponentClient();
 
-        // Exchange the code in the URL for a Supabase session
         const { error } = await supabase.auth.exchangeCodeForSession();
 
         if (error) {
           console.error("Auth callback error:", error.message);
-          router.replace("/login"); // back to login on failure
+          router.replace("/login");
         } else {
-          router.replace("/summaries/new"); // success → send to Build Summary page
+          router.replace("/summaries/new");
         }
       } catch (err) {
         console.error("Unexpected auth error:", err);
@@ -36,3 +35,4 @@ export default function AuthCallbackPage() {
     </main>
   );
 }
+
