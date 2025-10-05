@@ -1,32 +1,57 @@
 "use client";
 
-import { useEffect } from "react";
-import { useRouter } from "next/navigation";
-import { createClientComponentClient } from "@supabase/auth-helpers-nextjs";
+import { Suspense, useEffect } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
+import { supabaseBrowser } from "@/lib/supabase/client";
 
-export default function AuthCallbackPage() {
+export const dynamic = "force-dynamic";
+
+function CallbackInner() {
   const router = useRouter();
+  const params = useSearchParams();
+  const code = params.get("code");
+  const redirectTo = params.get("redirectTo") || "/dashboard";
+  const supabase = supabaseBrowser();
 
   useEffect(() => {
-    (async () => {
-      // Exchanges ?code=... in the URL for a Supabase session (PKCE flow)
-      const supabase = createClientComponentClient();
-      const { error } = await supabase.auth.exchangeCodeForSession();
-
-      if (error) {
-        console.error("Auth callback error:", error.message);
-        router.replace("/login");
+    let cancelled = false;
+    async function run() {
+      if (!code) {
+        router.replace("/login?error=no_code");
         return;
       }
-
-      // Success → send to Build Summary
-      router.replace("/summaries/new");
-    })();
-  }, [router]);
+      const { error } = await supabase.auth.exchangeCodeForSession(code);
+      if (error) {
+        router.replace(
+          `/login?error=exchange_failed&reason=${encodeURIComponent(error.message)}`
+        );
+        return;
+      }
+      if (!cancelled) router.replace(redirectTo);
+    }
+    void run();
+    return () => {
+      cancelled = true;
+    };
+  }, [code, redirectTo, router, supabase]);
 
   return (
-    <main className="min-h-screen flex items-center justify-center text-sm text-[#475569]">
-      Finishing sign-in…
+    <main className="mx-auto max-w-md p-6">
+      <p>Finishing sign-in…</p>
     </main>
+  );
+}
+
+export default function CallbackPage() {
+  return (
+    <Suspense
+      fallback={
+        <main className="mx-auto max-w-md p-6">
+          <p>Loading…</p>
+        </main>
+      }
+    >
+      <CallbackInner />
+    </Suspense>
   );
 }
