@@ -1,118 +1,73 @@
 "use client";
 
-import { Suspense, useEffect, useState } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
-import { supabaseBrowser } from "@/lib/supabase/client";
+import { useState } from "react";
+import { useSearchParams } from "next/navigation";
+import { createClient } from "@/lib/supabase/client";
+import { Button } from "@/components/ui/button";
 
-// Force dynamic so Next doesn't try to prerender /login
-export const dynamic = "force-dynamic";
-
-function LoginInner() {
-  const router = useRouter();
-  const params = useSearchParams();
-  const redirectTo = params.get("redirectTo") || "/dashboard";
-  const [busy, setBusy] = useState(true);
-  const supabase = supabaseBrowser();
-
-  useEffect(() => {
-    let cancelled = false;
-    async function init() {
-      const { data } = await supabase.auth.getSession();
-      if (data.session) {
-        if (!cancelled) router.replace(redirectTo);
-        return;
-      }
-
-      // Handle hash tokens (older flow): #access_token=...&refresh_token=...
-      if (typeof window !== "undefined" && window.location.hash) {
-        const hash = window.location.hash.slice(1);
-        const search = new URLSearchParams(hash);
-        const access_token = search.get("access_token");
-        const refresh_token = search.get("refresh_token");
-
-        if (access_token && refresh_token) {
-          const { error } = await supabase.auth.setSession({
-            access_token,
-            refresh_token,
-          });
-          if (!error) {
-            const clean = window.location.pathname + window.location.search;
-            window.history.replaceState(null, "", clean);
-            if (!cancelled) router.replace(redirectTo);
-            return;
-          }
-        }
-      }
-      setBusy(false);
-    }
-    void init();
-    return () => { cancelled = true; };
-  }, [router, redirectTo, supabase]);
-
-  return (
-    <main className="mx-auto max-w-md p-6">
-      {busy ? <p>Finishing sign-in…</p> : <LoginForm />}
-    </main>
-  );
-}
-
-function LoginForm() {
+export default function LoginPage() {
   const [email, setEmail] = useState("");
   const [sent, setSent] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const params = useSearchParams();
-  const redirectTo = params.get("redirectTo") || "/dashboard";
-  const supabase = supabaseBrowser();
+  const supabase = createClient();
+  const searchParams = useSearchParams();
+  const redirectTo = searchParams.get("redirectTo") || "/dashboard";
 
-  const onSubmit = async (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
-    const origin =
-      typeof window !== "undefined" ? window.location.origin : "";
-    const { error } = await supabase.auth.signInWithOtp({
-      email,
-      options: {
-        emailRedirectTo: `${origin}/auth/callback?redirectTo=${encodeURIComponent(
-          redirectTo
-        )}`,
-      },
-    });
-    if (error) setError(error.message);
-    else setSent(true);
+    try {
+      const { error } = await supabase.auth.signInWithOtp({
+        email,
+        options: {
+          emailRedirectTo: `${window.location.origin}/auth/callback?redirectTo=${redirectTo}`,
+        },
+      });
+      if (error) throw error;
+      setSent(true);
+    } catch (err: any) {
+      setError(err.message || "Failed to send magic link");
+    }
   };
 
-  if (sent) return <p>Check your email for the magic link.</p>;
-
   return (
-    <form onSubmit={onSubmit} className="space-y-3">
-      <label className="block">
-        <span className="block mb-1">Email</span>
-        <input
-          type="email"
-          required
-          className="w-full border px-3 py-2 rounded"
-          value={email}
-          onChange={(e) => setEmail(e.target.value)}
-        />
-      </label>
-      <button type="submit" className="w-full border px-3 py-2 rounded">
-        Send Magic Link
-      </button>
-      {error && <p className="text-red-600 text-sm">{error}</p>}
-    </form>
-  );
-}
+    <main className="flex min-h-screen items-center justify-center bg-slate-50 px-6">
+      <div className="w-full max-w-md rounded-2xl border bg-white p-8 shadow-sm">
+        <h1 className="mb-2 text-center text-2xl font-semibold text-slate-900">Welcome Back</h1>
+        <p className="mb-8 text-center text-slate-600">
+          Sign in with your email to continue.
+        </p>
 
-export default function LoginPage() {
-  return (
-    <Suspense
-      fallback={
-        <main className="mx-auto max-w-md p-6">
-          <p>Loading…</p>
-        </main>
-      }
-    >
-      <LoginInner />
-    </Suspense>
+        {!sent ? (
+          <form onSubmit={handleSubmit} className="space-y-5">
+            <div>
+              <label htmlFor="email" className="mb-1 block text-sm font-medium text-slate-700">
+                Email
+              </label>
+              <input
+                id="email"
+                type="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                placeholder="you@example.com"
+                required
+                className="w-full rounded-xl border border-slate-300 px-3 py-2 text-slate-900 placeholder:text-slate-400 focus:border-slate-900 focus:ring-2 focus:ring-slate-900/20"
+              />
+            </div>
+
+            {error && <p className="text-sm text-red-600">{error}</p>}
+
+            <Button type="submit" className="w-full">Send Magic Link</Button>
+          </form>
+        ) : (
+          <div className="text-center text-slate-700">
+            <p className="text-lg font-medium">Check your email</p>
+            <p className="mt-2 text-sm text-slate-500">
+              A magic link has been sent to <strong>{email}</strong>.
+            </p>
+          </div>
+        )}
+      </div>
+    </main>
   );
 }
