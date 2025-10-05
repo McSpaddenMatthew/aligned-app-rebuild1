@@ -1,4 +1,3 @@
-cat > middleware.ts <<'TS'
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 import { createServerClient } from "@supabase/ssr";
@@ -7,17 +6,14 @@ export async function middleware(req: NextRequest) {
   const url = req.nextUrl;
   const res = NextResponse.next();
 
-  // --- NEW: If Supabase sent us back with ?code= anywhere (/, /login, etc.),
-  // bounce to our dedicated callback to exchange the session.
+  // If Supabase sent us back with ?code= anywhere (/, /login, etc.),
+  // send it to our dedicated callback route to exchange the session.
   const code = url.searchParams.get("code");
   if (code && !url.pathname.startsWith("/auth/callback")) {
     const callbackUrl = new URL("/auth/callback", req.url);
     callbackUrl.searchParams.set("code", code);
-
-    // preserve redirectTo if present; otherwise default to /dashboard
     const redirectTo = url.searchParams.get("redirectTo") || "/dashboard";
     callbackUrl.searchParams.set("redirectTo", redirectTo);
-
     return NextResponse.redirect(callbackUrl);
   }
 
@@ -74,4 +70,3 @@ export async function middleware(req: NextRequest) {
 export const config = {
   matcher: ["/((?!_next|.*\\..*|api|assets|favicon.ico|robots.txt|sitemap.xml).*)"],
 };
-TS
