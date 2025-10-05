@@ -2,3 +2,10 @@
 
 /* your globals can go below */
 html, body, #__next { height: 100%; }
+
+/* --- MVP polish (non-breaking) --- */
+:root { color-scheme: light; }
+html { -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; }
+body { background: #f8fafc; } /* tailwind slate-50 */
+a { text-underline-offset: 3px; }
+input, textarea, button { outline: none; }

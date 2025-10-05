@@ -2,9 +2,38 @@
 
 import { Suspense, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
+import { Button } from "@/components/ui/button";
 
-// Tell Next not to prerender this client page (fixes build error)
 export const dynamic = "force-dynamic";
+
+function Field({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <label className="block">
+      <span className="mb-1 block text-sm font-medium text-slate-700">{label}</span>
+      {children}
+    </label>
+  );
+}
+
+function Input(props: React.InputHTMLAttributes<HTMLInputElement>) {
+  return (
+    <input
+      {...props}
+      className={`w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-slate-900 shadow-sm
+      placeholder:text-slate-400 focus:border-slate-900 focus:ring-2 focus:ring-slate-900/20 ${props.className || ""}`}
+    />
+  );
+}
+
+function Textarea(props: React.TextareaHTMLAttributes<HTMLTextAreaElement>) {
+  return (
+    <textarea
+      {...props}
+      className={`w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-slate-900 shadow-sm
+      placeholder:text-slate-400 focus:border-slate-900 focus:ring-2 focus:ring-slate-900/20 ${props.className || ""}`}
+    />
+  );
+}
 
 function NewSummaryForm() {
   const [title, setTitle] = useState("");
@@ -41,48 +70,28 @@ function NewSummaryForm() {
 
   return (
     <main className="mx-auto max-w-2xl p-6">
-      <h1 className="text-2xl font-semibold mb-4">Create Summary</h1>
-      <form onSubmit={onSubmit} className="space-y-4">
-        <label className="block">
-          <span className="block mb-1">Title *</span>
-          <input
-            className="w-full border rounded px-3 py-2"
-            required
-            value={title}
-            onChange={(e) => setTitle(e.target.value)}
-            placeholder="e.g., Candidate X — Screening Summary"
-          />
-        </label>
+      <h1 className="mb-6 text-3xl font-semibold tracking-tight text-slate-900">Create Summary</h1>
 
-        <label className="block">
-          <span className="block mb-1">Candidate</span>
-          <input
-            className="w-full border rounded px-3 py-2"
-            value={candidate}
-            onChange={(e) => setCandidate(e.target.value)}
-            placeholder="Optional"
-          />
-        </label>
+      <form onSubmit={onSubmit} className="space-y-5">
+        <Field label="Title *">
+          <Input required value={title} onChange={(e) => setTitle(e.target.value)} placeholder="e.g., VP, Data — First Screen" />
+        </Field>
 
-        <label className="block">
-          <span className="block mb-1">Notes</span>
-          <textarea
-            className="w-full border rounded px-3 py-2 min-h-[140px]"
-            value={notes}
-            onChange={(e) => setNotes(e.target.value)}
-            placeholder="Paste raw notes here…"
-          />
-        </label>
+        <Field label="Candidate (optional)">
+          <Input value={candidate} onChange={(e) => setCandidate(e.target.value)} placeholder="Jane Doe" />
+        </Field>
 
-        {error && <p className="text-red-600 text-sm">{error}</p>}
+        <Field label="Notes">
+          <Textarea value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Paste raw notes here…" rows={8} />
+        </Field>
+
+        {error && <p className="text-sm text-red-600">{error}</p>}
 
         <div className="flex gap-3">
-          <button type="submit" disabled={busy} className="border rounded px-4 py-2">
-            {busy ? "Saving…" : "Save"}
-          </button>
-          <button type="button" onClick={() => router.back()} className="border rounded px-4 py-2">
+          <Button type="submit" disabled={busy}>{busy ? "Saving…" : "Save"}</Button>
+          <Button type="button" variant="ghost" onClick={() => router.back()}>
             Cancel
-          </button>
+          </Button>
         </div>
       </form>
     </main>

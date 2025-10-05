@@ -17,12 +17,20 @@ export default async function SummaryDetail({ params }: { params: { id: string }
   if (error || !data) notFound();
 
   return (
-    <main className="mx-auto max-w-2xl p-6 space-y-4">
-      <Link href="/dashboard" className="underline">← Back</Link>
-      <h1 className="text-2xl font-semibold">{data.title}</h1>
-      {data.candidate && <p className="opacity-80">Candidate: {data.candidate}</p>}
+    <main className="mx-auto max-w-3xl p-6">
+      <div className="mb-6 flex items-center justify-between">
+        <Link href="/dashboard" className="text-sm underline decoration-slate-400 underline-offset-4 hover:decoration-slate-800">
+          ← Back
+        </Link>
+      </div>
+
+      <h1 className="mb-2 text-3xl font-semibold tracking-tight text-slate-900">{data.title}</h1>
+      {data.candidate && <p className="mb-6 text-slate-600">Candidate: <span className="font-medium text-slate-900">{data.candidate}</span></p>}
+
       {data.notes && (
-        <div className="border rounded p-3 whitespace-pre-wrap">{data.notes}</div>
+        <div className="rounded-xl border bg-white p-4 leading-relaxed text-slate-800 shadow-sm whitespace-pre-wrap">
+          {data.notes}
+        </div>
       )}
     </main>
   );
