@@ -1,11 +1,10 @@
 "use client";
 
-import { useState, Suspense } from "react";
+import { Suspense, useState } from "react";
 import { useSearchParams } from "next/navigation";
-import { createClient } from "@supabase/ssr";
-import { Button } from "@/components/ui/button";
+import { createBrowserClient } from "@supabase/ssr";
 
-// Stop static prerender for this page (avoids build-time SSR of useSearchParams)
+// avoid static prerender so useSearchParams runs at runtime
 export const dynamic = "force-dynamic";
 
 function LoginInner() {
@@ -16,7 +15,11 @@ function LoginInner() {
   const searchParams = useSearchParams();
   const redirectTo = searchParams.get("redirectTo") || "/dashboard";
 
-  const supabase = createClient();
+  // Browser client is the safe choice for client components
+  const supabase = createBrowserClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL as string,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY as string
+  );
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -25,22 +28,26 @@ function LoginInner() {
       const { error } = await supabase.auth.signInWithOtp({
         email,
         options: {
-          emailRedirectTo: `${window.location.origin}/auth/callback?redirectTo=${redirectTo}`,
+          emailRedirectTo: `${window.location.origin}/auth/callback?redirectTo=${encodeURIComponent(
+            redirectTo
+          )}`,
         },
       });
       if (error) throw error;
       setSent(true);
     } catch (err: any) {
-      setError(err.message || "Failed to send magic link");
+      setError(err?.message || "Failed to send magic link");
     }
   };
 
   return (
-    <>
+    <div className="max-w-md w-full space-y-5 p-6 rounded-xl border border-slate-200 bg-white shadow-sm">
+      <h1 className="text-center text-2xl font-semibold text-slate-900">Sign in</h1>
+
       {!sent ? (
-        <form onSubmit={handleSubmit} className="space-y-5">
+        <form onSubmit={handleSubmit} className="space-y-4">
           <div>
-            <label htmlFor="email" className="mb-1 block text-sm font-medium text-slate-700">
+            <label htmlFor="email" className="block text-sm font-medium text-slate-700 mb-1">
               Email
             </label>
             <input
@@ -53,32 +60,34 @@ function LoginInner() {
               className="w-full rounded-xl border border-slate-300 px-3 py-2 text-slate-900 placeholder:text-slate-400 focus:border-slate-900 focus:ring-2 focus:ring-slate-900/20"
             />
           </div>
+
           {error && <p className="text-sm text-red-600">{error}</p>}
-          <Button type="submit" className="w-full">Send Magic Link</Button>
+
+          <button
+            type="submit"
+            className="w-full rounded-xl bg-black text-white py-2 font-semibold hover:bg-slate-800"
+          >
+            Send Magic Link
+          </button>
         </form>
       ) : (
         <div className="text-center text-slate-700">
           <p className="text-lg font-medium">Check your email</p>
           <p className="mt-2 text-sm text-slate-500">
-            A magic link has been sent to <strong>{email}</strong>.
+            We sent a magic link to <strong>{email}</strong>.
           </p>
         </div>
       )}
-    </>
+    </div>
   );
 }
 
 export default function LoginPage() {
   return (
-    <main className="flex min-h-screen items-center justify-center bg-slate-50 px-6">
-      <div className="w-full max-w-md rounded-2xl border bg-white p-8 shadow-sm">
-        <h1 className="mb-2 text-center text-2xl font-semibold text-slate-900">Welcome Back</h1>
-        <p className="mb-8 text-center text-slate-600">Sign in with your email to continue.</p>
-
-        <Suspense fallback={<div className="text-center text-slate-500">Loading…</div>}>
-          <LoginInner />
-        </Suspense>
-      </div>
+    <main className="min-h-screen flex items-center justify-center bg-slate-50 px-6">
+      <Suspense fallback={<div className="text-slate-600">Loading…</div>}>
+        <LoginInner />
+      </Suspense>
     </main>
   );
 }
