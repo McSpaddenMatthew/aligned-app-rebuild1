@@ -1,50 +1,46 @@
 'use client';
-export const dynamic = 'force-dynamic';
 
 import { useEffect } from 'react';
-import { useRouter } from 'next/navigation';
-import { createClient } from '@supabase/supabase-js';
+import { useRouter, useSearchParams } from 'next/navigation';
+import { createClient } from '@/lib/supabase/client';
 
-export default function AuthCallback() {
+export const dynamic = 'force-dynamic';
+
+export default function AuthCallbackPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
 
   useEffect(() => {
     const run = async () => {
-      const supabase = createClient(
-        process.env.NEXT_PUBLIC_SUPABASE_URL!,
-        process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-      );
-
+      const supabase = createClient();
       const url = new URL(window.location.href);
-      const redirectTo = url.searchParams.get('redirectTo') || '/dashboard';
+      const redirectTo = searchParams.get('redirectTo') || '/dashboard';
 
       try {
-        // ---- Hash-token (non-PKCE) magic link ----
-        if (window.location.hash && window.location.hash.includes('access_token=')) {
-          const hash = window.location.hash.startsWith('#')
-            ? window.location.hash.slice(1)
-            : window.location.hash;
-          const h = new URLSearchParams(hash);
-          const access_token = h.get('access_token');
-          const refresh_token = h.get('refresh_token');
+        // Hash token flow: #access_token=…&refresh_token=…
+        if (url.hash && url.hash.includes('access_token=')) {
+          const hash = new URLSearchParams(url.hash.slice(1));
+          const access_token = hash.get('access_token');
+          const refresh_token = hash.get('refresh_token');
 
           if (access_token && refresh_token) {
             const { error } = await supabase.auth.setSession({ access_token, refresh_token });
             if (error) throw error;
+            window.history.replaceState({}, '', `/auth/callback?redirectTo=${encodeURIComponent(redirectTo)}`);
             router.replace(redirectTo);
             return;
           }
         }
 
-        // ---- PKCE code flow ----
-        if (url.searchParams.get('code')) {
-          const { error } = await supabase.auth.exchangeCodeForSession(window.location.href);
+        // PKCE code flow: ?code=…
+        const code = searchParams.get('code');
+        if (code) {
+          const { error } = await supabase.auth.exchangeCodeForSession(code);
           if (error) throw error;
           router.replace(redirectTo);
           return;
         }
 
-        // Nothing usable – go back to login
         router.replace('/login?error=no_auth_params');
       } catch (err) {
         console.error('Auth callback error:', err);
@@ -53,7 +49,8 @@ export default function AuthCallback() {
     };
 
     run();
-  }, [router]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   return (
     <div className="flex h-screen items-center justify-center">
@@ -61,3 +58,4 @@ export default function AuthCallback() {
     </div>
   );
 }
+
