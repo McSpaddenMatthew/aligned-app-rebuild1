@@ -1,6 +1,4 @@
-
-'use client';
-
+kk'use client';
 import { useEffect } from 'react';
 import { createClient } from '@supabase/supabase-js';
 
@@ -18,7 +16,6 @@ export default function AuthCallback() {
     (async () => {
       try {
         if (code) {
-          // PKCE/code flow: exchange ?code=... for a session
           const { error } = await supabase.auth.exchangeCodeForSession(code);
           if (error) {
             window.location.replace(
@@ -29,14 +26,9 @@ export default function AuthCallback() {
           window.location.replace(redirectTo);
           return;
         }
-
-        // Hash/implicit flow fallback (if we ever get #access_token)
         const { data: { session } } = await supabase.auth.getSession();
-        if (session) {
-          window.location.replace(redirectTo);
-        } else {
-          window.location.replace('/login?error=no_session');
-        }
+        if (session) window.location.replace(redirectTo);
+        else window.location.replace('/login?error=no_session');
       } catch (e: any) {
         window.location.replace(
           `/login?error=callback_crash&reason=${encodeURIComponent(e?.message || 'unknown')}`
