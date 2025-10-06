@@ -1,25 +1,27 @@
-
-import { NextResponse } from "next/server";
+cat > middleware.ts <<'TS'
 import type { NextRequest } from "next/server";
-import { createMiddlewareClient } from "@supabase/auth-helpers-nextjs";
+import { NextResponse } from "next/server";
 
-export const config = {
-  // Only protect app pages that require auth.
-  matcher: ["/dashboard/:path*", "/summaries/:path*"],
-};
+export function middleware(req: NextRequest) {
+  const url = req.nextUrl;
+  const code = url.searchParams.get("code");
 
-export async function middleware(req: NextRequest) {
   const res = NextResponse.next();
-  const supabase = createMiddlewareClient({ req, res });
-  const {
-    data: { session },
-  } = await supabase.auth.getSession();
+  res.headers.set("x-mw", code ? "has-code" : "no-code");
 
-  if (!session && req.nextUrl.pathname.startsWith("/dashboard")) {
-    const url = req.nextUrl.clone();
-    url.pathname = "/login";
-    url.searchParams.set("redirectTo", req.nextUrl.pathname + req.nextUrl.search);
-    return NextResponse.redirect(url);
+  if (code) {
+    const redirectTo = url.searchParams.get("redirectTo") ?? "/dashboard";
+    const dest = new URL("/auth/callback", req.url);
+    dest.searchParams.set("code", code);
+    dest.searchParams.set("redirectTo", redirectTo);
+    return NextResponse.redirect(dest);
   }
+
   return res;
 }
+
+export const config = {
+  matcher: ["/((?!_next/static|_next/image|favicon.ico|assets).*)"],
+};
+TS
+
