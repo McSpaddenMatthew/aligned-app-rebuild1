@@ -1,11 +1,11 @@
 'use client';
-
 import { useEffect } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { createClient } from '@supabase/supabase-js';
 
 export default function AuthCallback() {
   const router = useRouter();
+  const searchParams = useSearchParams();
 
   useEffect(() => {
     const handleCallback = async () => {
@@ -14,27 +14,22 @@ export default function AuthCallback() {
         process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
       );
 
-      // exchange the code in the URL for a session
-      const { error } = await supabase.auth.exchangeCodeForSession(window.location.href);
-
+      const { data, error } = await supabase.auth.exchangeCodeForSession(window.location.href);
       if (error) {
         console.error('Auth callback error:', error);
         router.replace('/login?error=callback_failed');
-        return;
+      } else {
+        const redirectTo = searchParams.get('redirectTo') || '/dashboard';
+        router.replace(redirectTo);
       }
-
-      // optional: honor ?redirectTo=... if present
-      const url = new URL(window.location.href);
-      const redirectTo = url.searchParams.get('redirectTo') || '/dashboard';
-      router.replace(redirectTo);
     };
 
     handleCallback();
-  }, [router]);
+  }, [router, searchParams]);
 
   return (
     <div className="flex h-screen items-center justify-center">
-      <p>Finishing sign-in…</p>
+      <p>Finishing sign-in...</p>
     </div>
   );
 }
