@@ -1,47 +1,54 @@
-"use client";
-import { useEffect, Suspense, useState } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
-import { createBrowserClient } from "@supabase/ssr";
-export const dynamic = "force-dynamic";
 
-function Inner() {
-  const router = useRouter();
-  const qp = useSearchParams();
-  const [msg, setMsg] = useState("Finishing sign-in…");
+'use client';
 
+import { useEffect } from 'react';
+import { createClient } from '@supabase/supabase-js';
+
+const supabase = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+);
+
+export default function AuthCallback() {
   useEffect(() => {
+    const url = new URL(window.location.href);
+    const code = url.searchParams.get('code');
+    const redirectTo = url.searchParams.get('redirectTo') || '/dashboard';
+
     (async () => {
-      const code = qp.get("code");
-      const redirectTo = qp.get("redirectTo") || "/dashboard";
-      if (!code) return router.replace("/login?error=no_code");
+      try {
+        if (code) {
+          // PKCE/code flow: exchange ?code=... for a session
+          const { error } = await supabase.auth.exchangeCodeForSession(code);
+          if (error) {
+            window.location.replace(
+              `/login?error=exchange_failed&reason=${encodeURIComponent(error.message)}`
+            );
+            return;
+          }
+          window.location.replace(redirectTo);
+          return;
+        }
 
-      const supabase = createBrowserClient(
-        process.env.NEXT_PUBLIC_SUPABASE_URL as string,
-        process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY as string
-      );
-
-      const { error } = await supabase.auth.exchangeCodeForSession(code);
-      if (error) {
-        setMsg("Sign-in failed. Redirecting…");
-        router.replace(`/login?error=exchange_failed&reason=${encodeURIComponent(error.message)}`);
-        return;
+        // Hash/implicit flow fallback (if we ever get #access_token)
+        const { data: { session } } = await supabase.auth.getSession();
+        if (session) {
+          window.location.replace(redirectTo);
+        } else {
+          window.location.replace('/login?error=no_session');
+        }
+      } catch (e: any) {
+        window.location.replace(
+          `/login?error=callback_crash&reason=${encodeURIComponent(e?.message || 'unknown')}`
+        );
       }
-      router.replace(redirectTo);
     })();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   return (
-    <main className="min-h-screen flex items-center justify-center bg-slate-50 px-6">
-      <div className="rounded-xl border bg-white px-6 py-4 shadow-sm text-slate-700">{msg}</div>
+    <main className="flex min-h-screen items-center justify-center">
+      <p className="text-slate-700">Finishing sign-in…</p>
     </main>
   );
 }
 
-export default function Page() {
-  return (
-    <Suspense fallback={<main className="min-h-screen grid place-items-center">Loading…</main>}>
-      <Inner />
-    </Suspense>
-  );
-}
