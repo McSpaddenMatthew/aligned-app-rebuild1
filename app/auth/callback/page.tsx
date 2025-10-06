@@ -1,5 +1,5 @@
 'use client';
-export const dynamic = 'force-dynamic'; // don't prerender this page
+export const dynamic = 'force-dynamic';
 
 import { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
@@ -10,22 +10,44 @@ export default function AuthCallback() {
 
   useEffect(() => {
     const run = async () => {
+      const supabase = createClient(
+        process.env.NEXT_PUBLIC_SUPABASE_URL!,
+        process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+      );
+
+      const url = new URL(window.location.href);
+      const redirectTo = url.searchParams.get('redirectTo') || '/dashboard';
+
       try {
-        const supabase = createClient(
-          process.env.NEXT_PUBLIC_SUPABASE_URL!,
-          process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-        );
+        // ---- Hash-token (non-PKCE) magic link ----
+        if (window.location.hash && window.location.hash.includes('access_token=')) {
+          const hash = window.location.hash.startsWith('#')
+            ? window.location.hash.slice(1)
+            : window.location.hash;
+          const h = new URLSearchParams(hash);
+          const access_token = h.get('access_token');
+          const refresh_token = h.get('refresh_token');
 
-        // Exchange the code fragment/params for a session
-        const { error } = await supabase.auth.exchangeCodeForSession(window.location.href);
-        if (error) throw error;
+          if (access_token && refresh_token) {
+            const { error } = await supabase.auth.setSession({ access_token, refresh_token });
+            if (error) throw error;
+            router.replace(redirectTo);
+            return;
+          }
+        }
 
-        // Read optional redirect target (fallback to /dashboard)
-        const url = new URL(window.location.href);
-        const redirectTo = url.searchParams.get('redirectTo') || '/dashboard';
-        router.replace(redirectTo);
-      } catch (e) {
-        console.error('Auth callback error:', e);
+        // ---- PKCE code flow ----
+        if (url.searchParams.get('code')) {
+          const { error } = await supabase.auth.exchangeCodeForSession(window.location.href);
+          if (error) throw error;
+          router.replace(redirectTo);
+          return;
+        }
+
+        // Nothing usable – go back to login
+        router.replace('/login?error=no_auth_params');
+      } catch (err) {
+        console.error('Auth callback error:', err);
         router.replace('/login?error=callback_failed');
       }
     };
@@ -39,4 +61,3 @@ export default function AuthCallback() {
     </div>
   );
 }
-
