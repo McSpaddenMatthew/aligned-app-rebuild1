@@ -1,26 +1,19 @@
 "use client";
-
-import { useEffect, useState, Suspense } from "react";
+import { useEffect, Suspense, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { createBrowserClient } from "@supabase/ssr";
-
 export const dynamic = "force-dynamic";
 
-function CallbackInner() {
+function Inner() {
   const router = useRouter();
-  const searchParams = useSearchParams();
-
+  const qp = useSearchParams();
   const [msg, setMsg] = useState("Finishing sign-in…");
 
   useEffect(() => {
-    const run = async () => {
-      const code = searchParams.get("code");
-      const redirectTo = searchParams.get("redirectTo") || "/dashboard";
-
-      if (!code) {
-        router.replace("/login?error=no_code");
-        return;
-      }
+    (async () => {
+      const code = qp.get("code");
+      const redirectTo = qp.get("redirectTo") || "/dashboard";
+      if (!code) return router.replace("/login?error=no_code");
 
       const supabase = createBrowserClient(
         process.env.NEXT_PUBLIC_SUPABASE_URL as string,
@@ -29,31 +22,26 @@ function CallbackInner() {
 
       const { error } = await supabase.auth.exchangeCodeForSession(code);
       if (error) {
-        setMsg("Sign-in failed. Redirecting to login…");
+        setMsg("Sign-in failed. Redirecting…");
         router.replace(`/login?error=exchange_failed&reason=${encodeURIComponent(error.message)}`);
         return;
       }
-
       router.replace(redirectTo);
-    };
-
-    run();
+    })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   return (
     <main className="min-h-screen flex items-center justify-center bg-slate-50 px-6">
-      <div className="rounded-xl border bg-white px-6 py-4 shadow-sm text-slate-700">
-        {msg}
-      </div>
+      <div className="rounded-xl border bg-white px-6 py-4 shadow-sm text-slate-700">{msg}</div>
     </main>
   );
 }
 
-export default function CallbackPage() {
+export default function Page() {
   return (
-    <Suspense fallback={<main className="min-h-screen flex items-center justify-center">Loading…</main>}>
-      <CallbackInner />
+    <Suspense fallback={<main className="min-h-screen grid place-items-center">Loading…</main>}>
+      <Inner />
     </Suspense>
   );
 }
