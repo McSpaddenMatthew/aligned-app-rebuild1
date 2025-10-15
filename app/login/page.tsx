@@ -1,18 +1,17 @@
 'use client';
 
-import { useEffect, useMemo, useState, Suspense } from 'react';
+import { Suspense, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { createClient } from '@supabase/supabase-js';
 
-// ---- Supabase envs ----
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL as string;
 const supabaseAnon = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY as string;
 
-// ---- Helpers ----
 type HashParams = Record<string, string>;
 function parseHash(hash: string): HashParams {
   const h = hash.startsWith('#') ? hash.slice(1) : hash;
+  if (!h) return {};
   return h.split('&').reduce<HashParams>((acc, kv) => {
     const [k, v] = kv.split('=');
     if (k) acc[decodeURIComponent(k)] = decodeURIComponent(v ?? '');
@@ -20,9 +19,6 @@ function parseHash(hash: string): HashParams {
   }, {});
 }
 
-// -------------------------------
-// Inner content (uses hooks)
-// -------------------------------
 function LoginPageContent() {
   const router = useRouter();
   const search = useSearchParams();
@@ -34,7 +30,8 @@ function LoginPageContent() {
 
   const supabase = useMemo(() => createClient(supabaseUrl, supabaseAnon), []);
 
-  // Handle return from Supabase (hash tokens OR PKCE code) and already-signed-in case
+  // If user returns with tokens, set session and go to `next`.
+  // If already signed in, skip the page entirely.
   useEffect(() => {
     let cancelled = false;
     (async () => {
@@ -44,10 +41,11 @@ function LoginPageContent() {
         return;
       }
 
-      // Hash style: /login#access_token=...&refresh_token=...
+      // Hash tokens (/#access_token=...&refresh_token=...)
       if (typeof window !== 'undefined' && window.location.hash.includes('access_token=')) {
         const params = parseHash(window.location.hash);
-        history.replaceState(null, '', window.location.pathname + window.location.search); // clear hash
+        // Clean the hash so refreshes don't repeat work
+        history.replaceState(null, '', window.location.pathname + window.location.search);
         if (params.access_token && params.refresh_token) {
           const { error } = await supabase.auth.setSession({
             access_token: params.access_token,
@@ -58,14 +56,16 @@ function LoginPageContent() {
         }
       }
 
-      // PKCE code style: /login?code=...
+      // PKCE code (?code=...)
       const code = search.get('code');
       if (code) {
         const { error } = await supabase.auth.exchangeCodeForSession(code);
         if (!cancelled && !error) router.replace(next);
       }
     })();
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
   }, [supabase, router, next, search]);
 
   // Send magic link
@@ -84,9 +84,15 @@ function LoginPageContent() {
       options: { emailRedirectTo },
     });
 
-    if (error) setNotice({ kind: 'err', text: error.message });
-    else setNotice({ kind: 'ok', text: 'Magic link sent — check your email.' });
-
+    if (error) {
+      setNotice({ kind: 'err', text: error.message });
+    } else {
+      setNotice({
+        kind: 'ok',
+        text:
+          'Magic link sent — check your email. After clicking the link, you’ll land on your dashboard.',
+      });
+    }
     setSending(false);
   };
 
@@ -100,7 +106,7 @@ function LoginPageContent() {
             <span className="font-semibold">Aligned</span>
           </Link>
           <Link
-            href="/login"
+            href="/login?next=/dashboard"
             className="rounded-xl px-4 py-2 text-sm font-medium border hover:bg-gray-50"
           >
             Login
@@ -177,9 +183,8 @@ function LoginPageContent() {
               </p>
             </div>
 
-            {/* Preview tip */}
             <p className="mt-4 text-xs text-gray-400">
-              Debugging? Use the same domain (prod vs preview) that sent the email link.
+              Debugging? Open the magic link on the same domain (prod vs preview) that sent it.
             </p>
           </section>
         </div>
@@ -195,9 +200,6 @@ function LoginPageContent() {
   );
 }
 
-// -------------------------------
-// Suspense wrapper (required for useSearchParams)
-// -------------------------------
 export default function LoginPage() {
   return (
     <Suspense fallback={<div className="p-10 text-center text-gray-500">Loading login page…</div>}>
