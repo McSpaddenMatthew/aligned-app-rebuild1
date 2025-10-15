@@ -1,29 +1,25 @@
+// app/layout.tsx
 import './globals.css';
-import type { Metadata } from 'next';
-import AuthHashCatcher from './AuthHashCatcher';
+import Link from 'next/link';
 
-export const metadata: Metadata = {
-  title: 'Aligned',
-  description: 'Hiring decisions need evidence. Recruiters need trust.',
-  icons: { icon: '/favicon.ico' },
-};
-
-export default function RootLayout({
-  children,
-}: {
-  children: React.ReactNode;
-}) {
+export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en">
-      <body className="min-h-screen bg-white text-gray-900 antialiased">
-        {/* 
-          Runs on every route. If the URL contains a Supabase #access_token hash,
-          it forwards to /login where the session is set.
-        */}
-        <AuthHashCatcher />
-
-        {/* Page Content */}
-        {children}
+      <body className="min-h-screen bg-white text-black">
+        <header className="sticky top-0 z-10 border-b bg-white/80 backdrop-blur">
+          <div className="mx-auto flex max-w-6xl items-center justify-between px-4 py-3">
+            <Link href="/" className="font-semibold">Aligned</Link>
+            <nav className="flex items-center gap-3">
+              <Link href="/login?next=/dashboard" className="rounded-xl border px-3 py-1.5">
+                Login
+              </Link>
+              <Link href="/dashboard" className="rounded-xl border px-3 py-1.5">
+                Dashboard
+              </Link>
+            </nav>
+          </div>
+        </header>
+        <div className="mx-auto max-w-6xl px-4">{children}</div>
       </body>
     </html>
   );

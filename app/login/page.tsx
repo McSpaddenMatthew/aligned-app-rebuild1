@@ -1,211 +1,73 @@
+// app/login/page.tsx
 'use client';
 
-import { Suspense, useEffect, useMemo, useState } from 'react';
-import Link from 'next/link';
+import { useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { createClient } from '@supabase/supabase-js';
+import { supabase } from '@/lib/supabase/client';
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL as string;
-const supabaseAnon = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY as string;
-
-type HashParams = Record<string, string>;
-function parseHash(hash: string): HashParams {
-  const h = hash.startsWith('#') ? hash.slice(1) : hash;
-  if (!h) return {};
-  return h.split('&').reduce<HashParams>((acc, kv) => {
-    const [k, v] = kv.split('=');
-    if (k) acc[decodeURIComponent(k)] = decodeURIComponent(v ?? '');
-    return acc;
-  }, {});
-}
-
-function LoginPageContent() {
-  const router = useRouter();
-  const search = useSearchParams();
-  const next = search.get('next') || '/dashboard';
-
+export default function LoginPage() {
   const [email, setEmail] = useState('');
-  const [sending, setSending] = useState(false);
-  const [notice, setNotice] = useState<{ kind: 'ok' | 'err'; text: string } | null>(null);
+  const [sent, setSent] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const next = useSearchParams().get('next') || '/dashboard';
+  const router = useRouter();
 
-  const supabase = useMemo(() => createClient(supabaseUrl, supabaseAnon), []);
-
-  // If user returns with tokens, set session and go to `next`.
-  // If already signed in, skip the page entirely.
-  useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!cancelled && session) {
-        router.replace(next);
-        return;
-      }
-
-      // Hash tokens (/#access_token=...&refresh_token=...)
-      if (typeof window !== 'undefined' && window.location.hash.includes('access_token=')) {
-        const params = parseHash(window.location.hash);
-        // Clean the hash so refreshes don't repeat work
-        history.replaceState(null, '', window.location.pathname + window.location.search);
-        if (params.access_token && params.refresh_token) {
-          const { error } = await supabase.auth.setSession({
-            access_token: params.access_token,
-            refresh_token: params.refresh_token,
-          });
-          if (!cancelled && !error) router.replace(next);
-          return;
-        }
-      }
-
-      // PKCE code (?code=...)
-      const code = search.get('code');
-      if (code) {
-        const { error } = await supabase.auth.exchangeCodeForSession(code);
-        if (!cancelled && !error) router.replace(next);
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [supabase, router, next, search]);
-
-  // Send magic link
-  const sendMagic = async (e: React.FormEvent) => {
+  async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    setSending(true);
-    setNotice(null);
-
-    const emailRedirectTo =
-      typeof window !== 'undefined'
-        ? `${window.location.origin}/login?next=${encodeURIComponent(next)}`
-        : undefined;
+    setLoading(true);
 
     const { error } = await supabase.auth.signInWithOtp({
       email,
-      options: { emailRedirectTo },
+      options: {
+        emailRedirectTo: `${window.location.origin}/auth/callback?next=${encodeURIComponent(next)}`,
+      },
     });
 
-    if (error) {
-      setNotice({ kind: 'err', text: error.message });
-    } else {
-      setNotice({
-        kind: 'ok',
-        text:
-          'Magic link sent — check your email. After clicking the link, you’ll land on your dashboard.',
-      });
-    }
-    setSending(false);
-  };
+    setLoading(false);
+    if (!error) setSent(true);
+  }
 
   return (
-    <div className="min-h-screen bg-white text-gray-900 flex flex-col">
-      {/* Top nav */}
-      <header className="w-full border-b">
-        <div className="mx-auto max-w-6xl px-6 h-16 flex items-center justify-between">
-          <Link href="/" className="flex items-center gap-2">
-            <div className="h-6 w-6 rounded-full bg-black" />
-            <span className="font-semibold">Aligned</span>
-          </Link>
-          <Link
-            href="/login?next=/dashboard"
-            className="rounded-xl px-4 py-2 text-sm font-medium border hover:bg-gray-50"
-          >
-            Login
-          </Link>
-        </div>
-      </header>
+    <div className="min-h-[60vh] grid place-items-center p-8">
+      <div className="w-full max-w-md rounded-2xl border p-6 space-y-4">
+        {/* 🔧 Change headline/copy freely — does not affect auth */}
+        <h1 className="text-2xl font-semibold">Welcome back</h1>
+        <p className="text-slate-600">Sign in via magic link. No passwords, no loops.</p>
 
-      {/* Hero + form */}
-      <main className="flex-1">
-        <div className="mx-auto max-w-6xl px-6 py-16 grid grid-cols-1 md:grid-cols-2 gap-12 items-center">
-          {/* Hero copy */}
-          <section>
-            <h1 className="text-4xl md:text-5xl font-bold leading-tight">
-              Hiring decisions need evidence. <br className="hidden md:block" />
-              Recruiters need trust. <span className="text-[#FF6B35]">Meet the bridge.</span>
-            </h1>
-            <p className="mt-4 text-lg text-gray-600">
-              Aligned turns messy inputs into decision-ready reports that hiring managers trust.
-            </p>
-            <ul className="mt-8 space-y-3 text-gray-800">
-              <li className="flex items-start gap-3">
-                <span className="mt-1 h-2 w-2 rounded-full bg-black" />
-                Start with the hiring manager’s words.
-              </li>
-              <li className="flex items-start gap-3">
-                <span className="mt-1 h-2 w-2 rounded-full bg-black" />
-                From words to decisions — structured, comparable, executive-ready.
-              </li>
-              <li className="flex items-start gap-3">
-                <span className="mt-1 h-2 w-2 rounded-full bg-black" />
-                Deliver with confidence straight to their inbox.
-              </li>
-            </ul>
-          </section>
+        {sent ? (
+          <div className="rounded-lg border p-4">
+            Check your email for the sign-in link. After you click it, you’ll land on your dashboard.
+          </div>
+        ) : (
+          <form onSubmit={handleSubmit} className="space-y-3">
+            <input
+              type="email"
+              required
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              placeholder="you@company.com"
+              className="w-full rounded-lg border px-3 py-2"
+            />
+            <button
+              type="submit"
+              disabled={loading}
+              className="w-full rounded-xl border px-4 py-2 font-medium hover:bg-black hover:text-white transition"
+            >
+              {loading ? 'Sending…' : 'Email me a magic link'}
+            </button>
+          </form>
+        )}
 
-          {/* Login card */}
-          <section>
-            <div className="rounded-2xl border shadow-sm p-8">
-              <h2 className="text-2xl font-semibold">Sign in</h2>
-              <p className="mt-1 text-sm text-gray-500">
-                Use your email and we’ll send you a magic link.
-              </p>
-
-              <form onSubmit={sendMagic} className="mt-6 space-y-4">
-                <input
-                  type="email"
-                  required
-                  placeholder="you@company.com"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  className="w-full rounded-xl border px-4 py-3 outline-none"
-                />
-                <button
-                  type="submit"
-                  disabled={sending}
-                  className="w-full rounded-2xl px-4 py-3 font-medium bg-black text-white hover:opacity-90 disabled:opacity-60"
-                >
-                  {sending ? 'Sending…' : 'Send Magic Link'}
-                </button>
-              </form>
-
-              {notice && (
-                <p
-                  className={`mt-4 text-sm ${
-                    notice.kind === 'err' ? 'text-red-600' : 'text-green-700'
-                  }`}
-                >
-                  {notice.text}
-                </p>
-              )}
-
-              <p className="mt-6 text-xs text-gray-500">
-                You’ll be returned to <code>{next}</code> after you click the link.
-              </p>
-            </div>
-
-            <p className="mt-4 text-xs text-gray-400">
-              Debugging? Open the magic link on the same domain (prod vs preview) that sent it.
-            </p>
-          </section>
-        </div>
-      </main>
-
-      <footer className="border-t">
-        <div className="mx-auto max-w-6xl px-6 h-14 flex items-center justify-between text-sm text-gray-500">
-          <span>© {new Date().getFullYear()} Aligned</span>
-          <span>Built for recruiters. Trusted by hiring managers.</span>
-        </div>
-      </footer>
+        <button
+          onClick={() => router.push('/')}
+          className="text-sm text-slate-500 underline underline-offset-4"
+        >
+          ← Back to home
+        </button>
+      </div>
     </div>
   );
 }
 
-export default function LoginPage() {
-  return (
-    <Suspense fallback={<div className="p-10 text-center text-gray-500">Loading login page…</div>}>
-      <LoginPageContent />
-    </Suspense>
-  );
-}
 
 
