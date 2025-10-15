@@ -1,36 +1,22 @@
-import { cookies } from "next/headers";
-import { redirect } from "next/navigation";
-import { createServerClient } from "@supabase/ssr";
+'use client';
+import { useEffect } from 'react';
+import { useRouter } from 'next/navigation';
+import { createClient } from '@supabase/supabase-js';
 
-export const dynamic = "force-dynamic";
-export const revalidate = 0;
+const supabase = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+);
 
-export default async function Dashboard() {
-  const cookieStore = cookies();
-  const supabase = createServerClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-    {
-      cookies: {
-        get: (name) => cookieStore.get(name)?.value,
-        set: (name, value, options) => cookieStore.set({ name, value, ...options }),
-        remove: (name, options) => cookieStore.set({ name, value: "", ...options, maxAge: 0 }),
-      },
-    }
-  );
+export default function DashboardPage() {
+  const router = useRouter();
 
-  const { data: { user } } = await supabase.auth.getUser();
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (!session) router.replace('/login?next=/dashboard');
+    });
+  }, [router]);
 
-  if (!user) {
-    redirect("/login");
-  }
-
-  return (
-    <main className="min-h-screen grid place-items-center">
-      <div className="rounded-2xl shadow p-8 border w-[680px]">
-        <h1 className="text-2xl font-semibold mb-2">Dashboard</h1>
-        <p className="opacity-75">Welcome, {user.email}</p>
-      </div>
-    </main>
-  );
+  return <div className="p-8">Dashboard</div>;
 }
+
