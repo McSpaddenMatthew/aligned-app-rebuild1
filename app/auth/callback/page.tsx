@@ -1,4 +1,4 @@
-x'use client';
+'use client';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
@@ -30,7 +30,10 @@ function CallbackInner() {
         const code = search.get('code');
         if (code) {
           await supabase.auth.exchangeCodeForSession({ code });
-        } else if (typeof window !== 'undefined' && window.location.hash.includes('access_token')) {
+        } else if (
+          typeof window !== 'undefined' &&
+          window.location.hash.includes('access_token')
+        ) {
           const params = new URLSearchParams(window.location.hash.slice(1));
           const access_token = params.get('access_token') ?? undefined;
           const refresh_token = params.get('refresh_token') ?? undefined;
@@ -51,7 +54,6 @@ function CallbackInner() {
 }
 
 export default function AuthCallbackPage() {
-  // Wrap the hook-using child in Suspense to satisfy Next 15
   return (
     <Suspense fallback={<Fallback />}>
       <CallbackInner />
