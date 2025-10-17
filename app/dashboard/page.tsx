@@ -1,20 +1,42 @@
-// app/dashboard/page.tsx
-import { redirect } from 'next/navigation';
-import { createServerSupabase } from '@/lib/supabase/server';
+'use client';
 
-export default async function DashboardPage() {
-  const supabase = createServerSupabase();
-  const { data: { session } } = await supabase.auth.getSession();
+import { useEffect, useState } from 'react';
+import { useRouter } from 'next/navigation';
+import { createClient } from '@supabase/supabase-js';
 
-  if (!session) {
-    redirect('/login?next=/dashboard');
+const supabase = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+);
+
+export default function DashboardPage() {
+  const router = useRouter();
+  const [loading, setLoading] = useState(true);
+
+  console.log('[DEBUG] Dashboard loaded: checking Supabase session');
+
+  useEffect(() => {
+    const checkSession = async () => {
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+
+      console.log('[DEBUG] Session result:', session);
+
+      if (!session) {
+        router.replace('/login');
+      } else {
+        setLoading(false);
+      }
+    };
+
+    checkSession();
+  }, [router]);
+
+  if (loading) {
+    return <div className="p-8">Loading dashboard...</div>;
   }
 
-  // 🔧 Change your dashboard UI/words here
-  return (
-    <div className="p-8 space-y-4">
-      <h1 className="text-2xl font-semibold">Dashboard</h1>
-      <p className="text-slate-600">You’re signed in. Build with confidence.</p>
-    </div>
-  );
+  return <div className="p-8">Dashboard ready.</div>;
 }
+
