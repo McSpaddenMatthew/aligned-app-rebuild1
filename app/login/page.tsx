@@ -1,73 +1,67 @@
-// app/login/page.tsx
 'use client';
 
-import { useState } from 'react';
+export const dynamic = 'force-dynamic';
+export const revalidate = 0;
+
+import { Suspense, useState } from 'react';
+import { createClient } from '@supabase/supabase-js';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { supabase } from '@/lib/supabase/client';
 
-export default function LoginPage() {
-  const [email, setEmail] = useState('');
-  const [sent, setSent] = useState(false);
-  const [loading, setLoading] = useState(false);
-  const next = useSearchParams().get('next') || '/dashboard';
+const supabase = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+);
+
+function LoginInner() {
   const router = useRouter();
+  const search = useSearchParams();
+  const [email, setEmail] = useState('');
 
-  async function handleSubmit(e: React.FormEvent) {
+  const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
-    setLoading(true);
-
-    const { error } = await supabase.auth.signInWithOtp({
+    await supabase.auth.signInWithOtp({
       email,
       options: {
-        emailRedirectTo: `${window.location.origin}/auth/callback?next=${encodeURIComponent(next)}`,
+        emailRedirectTo: `${window.location.origin}/auth/callback`,
       },
     });
-
-    setLoading(false);
-    if (!error) setSent(true);
-  }
+    alert('Check your email for a login link!');
+  };
 
   return (
-    <div className="min-h-[60vh] grid place-items-center p-8">
-      <div className="w-full max-w-md rounded-2xl border p-6 space-y-4">
-        {/* 🔧 Change headline/copy freely — does not affect auth */}
-        <h1 className="text-2xl font-semibold">Welcome back</h1>
-        <p className="text-slate-600">Sign in via magic link. No passwords, no loops.</p>
-
-        {sent ? (
-          <div className="rounded-lg border p-4">
-            Check your email for the sign-in link. After you click it, you’ll land on your dashboard.
-          </div>
-        ) : (
-          <form onSubmit={handleSubmit} className="space-y-3">
-            <input
-              type="email"
-              required
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              placeholder="you@company.com"
-              className="w-full rounded-lg border px-3 py-2"
-            />
-            <button
-              type="submit"
-              disabled={loading}
-              className="w-full rounded-xl border px-4 py-2 font-medium hover:bg-black hover:text-white transition"
-            >
-              {loading ? 'Sending…' : 'Email me a magic link'}
-            </button>
-          </form>
-        )}
-
+    <div className="flex h-screen items-center justify-center bg-gray-50">
+      <form
+        onSubmit={handleLogin}
+        className="bg-white p-8 rounded-xl shadow-md w-80"
+      >
+        <h1 className="text-2xl font-bold mb-4 text-center">Login</h1>
+        <input
+          type="email"
+          placeholder="Email"
+          className="border w-full p-2 mb-4 rounded"
+          value={email}
+          onChange={(e) => setEmail(e.target.value)}
+          required
+        />
         <button
-          onClick={() => router.push('/')}
-          className="text-sm text-slate-500 underline underline-offset-4"
+          type="submit"
+          className="bg-orange-500 text-white w-full py-2 rounded hover:bg-orange-600"
         >
-          ← Back to home
+          Send Magic Link
         </button>
-      </div>
+      </form>
     </div>
   );
 }
+
+export default function LoginPage() {
+  return (
+    <Suspense fallback={<div>Loading login...</div>}>
+      <LoginInner />
+    </Suspense>
+  );
+}
+
 
 
 
