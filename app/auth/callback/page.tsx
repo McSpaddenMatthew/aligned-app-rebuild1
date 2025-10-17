@@ -1,57 +1,51 @@
-"use client";
+'use client';
 
-import { useEffect } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
-import { supabaseBrowser } from "@/lib/supabaseBrowser";
+import { useEffect } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
+import { createClient } from '@supabase/supabase-js';
+
+// Create Supabase client directly — no missing alias imports
+const supabase = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+);
 
 export default function AuthCallbackPage() {
   const router = useRouter();
-  const sp = useSearchParams();
-  const next = sp.get("next") || "/dashboard";
-  const supabase = supabaseBrowser();
+  const search = useSearchParams();
 
   useEffect(() => {
-    (async () => {
-      const code = sp.get("code");
-      if (code) {
-        try {
-          await supabase.auth.exchangeCodeForSession(code);
-        } catch (e) {
-          console.error("Exchange code error:", e);
-        } finally {
-          router.replace(next);
-        }
-        return;
-      }
-
-      if (typeof window !== "undefined" && window.location.hash) {
-        const hash = new URLSearchParams(window.location.hash.substring(1));
-        const access_token = hash.get("access_token");
-        const refresh_token = hash.get("refresh_token");
-
-        if (access_token && refresh_token) {
-          try {
+    const handleAuthCallback = async () => {
+      try {
+        // Case 1: PKCE flow (?code=)
+        const code = search.get('code');
+        if (code) {
+          await supabase.auth.exchangeCodeForSession({ code });
+        } else if (
+          typeof window !== 'undefined' &&
+          window.location.hash.includes('access_token')
+        ) {
+          // Case 2: implicit flow (#access_token=...)
+          const params = new URLSearchParams(window.location.hash.slice(1));
+          const access_token = params.get('access_token') ?? undefined;
+          const refresh_token = params.get('refresh_token') ?? undefined;
+          if (access_token && refresh_token) {
             await supabase.auth.setSession({ access_token, refresh_token });
-          } catch (e) {
-            console.error("Set session error:", e);
-          } finally {
-            const cleanUrl = window.location.pathname + (next ? `?next=${encodeURIComponent(next)}` : "");
-            window.history.replaceState({}, "", cleanUrl);
-            router.replace(next);
           }
-          return;
         }
+      } catch (error) {
+        console.error('Auth callback error:', error);
+      } finally {
+        router.replace('/dashboard');
       }
+    };
 
-      router.replace("/login" + (next ? `?next=${encodeURIComponent(next)}` : ""));
-    })();
-  }, [router, sp, next, supabase]);
+    handleAuthCallback();
+  }, [router, search]);
 
   return (
-    <main className="max-w-md">
-      <div className="rounded-2xl border p-6 shadow-sm">
-        <p className="text-sm text-slate-600">Signing you in…</p>
-      </div>
-    </main>
+    <div className="flex h-screen items-center justify-center text-lg">
+      Signing you in...
+    </div>
   );
 }
