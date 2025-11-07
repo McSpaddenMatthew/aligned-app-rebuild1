@@ -1,0 +1,16 @@
+{
+  "projectId": "prj_e41sfMKl7hlwfA7DIGvLAfRDZUQW",
+  "orgId": "team_qwdqVAztGtbD41v3IRJ3VRet",
+  "projectName": "wearealigned",
+  "settings": {
+    "createdAt": 1758507571180,
+    "framework": "nextjs",
+    "devCommand": null,
+    "installCommand": null,
+    "buildCommand": null,
+    "outputDirectory": null,
+    "rootDirectory": null,
+    "directoryListing": false,
+    "nodeVersion": "22.x"
+  }
+}

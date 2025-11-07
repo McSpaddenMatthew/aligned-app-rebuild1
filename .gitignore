@@ -1,1 +1,15 @@
-.vercel
+# Node / Next.js
+node_modules
+.next
+out
+dist
+# Env files
+.env
+.env.local
+.env.*.local
+# OS / logs
+.DS_Store
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
