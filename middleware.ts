@@ -6,6 +6,8 @@ export function middleware(req: NextRequest) {
   const isAuthCallback = url.pathname.startsWith("/auth/callback");
   const isPublic =
     isAuthCallback ||
+    url.pathname.startsWith("/share") ||
+    url.pathname.startsWith("/auth/logout") ||
     url.pathname.startsWith("/login") ||
     url.pathname === "/" ||
     url.pathname.startsWith("/_next") ||
@@ -13,8 +15,8 @@ export function middleware(req: NextRequest) {
 
   if (isPublic) return NextResponse.next();
 
-  const hasSession =
-    req.cookies.get("sb-access-token") || req.cookies.get("sb-session");
+  const hasSession = req.cookies.get("sb-access-token") ||
+    req.cookies.getAll().some((cookie) => cookie.name.startsWith("sb-") && cookie.name.includes("-auth-token"));
 
   if (!hasSession) {
     const loginUrl = new URL("/login", url);
