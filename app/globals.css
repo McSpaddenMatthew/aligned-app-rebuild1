@@ -1,1 +1,16 @@
-html,body{margin:0;padding:0}
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Simple reset */
+html,
+body {
+  margin: 0;
+  padding: 0;
+}
+
+/* Optional: base font */
+body {
+  font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont,
+    "Inter", sans-serif;
+}
