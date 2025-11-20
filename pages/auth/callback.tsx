@@ -1,42 +1,51 @@
-// pages/auth/callback.tsx
-import { useEffect } from "react";
-import { useRouter } from "next/router";
-import { createClient } from "@supabase/supabase-js";
+import { useEffect, useState } from 'react';
+import { useRouter } from 'next/router';
+import { createBrowserClient } from '@supabase/ssr';
+import type { Database } from '@/lib/supabase/types';
 
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-);
-
-export default function Callback() {
+export default function AuthCallback() {
   const router = useRouter();
+  const [message, setMessage] = useState('Finishing sign-in…');
 
   useEffect(() => {
-    // Grab everything after the # from the URL
-    const hash = window.location.hash.substring(1);
-    const params = new URLSearchParams(hash);
+    const run = async () => {
+      // 1. Read the fragment or query params from the magic link
+      const url = new URL(window.location.href);
 
-    const access_token = params.get("access_token");
-    const refresh_token = params.get("refresh_token");
+      // Supabase sends a `code` param when you use emailRedirectTo
+      const code = url.searchParams.get('code');
 
-    if (access_token && refresh_token) {
-      supabase.auth
-        .setSession({ access_token, refresh_token })
-        .then(() => {
-          router.replace("/dashboard");
-        })
-        .catch((error) => {
-          console.error("Error setting session:", error);
-          router.replace("/login");
-        });
-    } else {
-      router.replace("/login");
-    }
+      if (!code) {
+        setMessage('No auth code found. Try requesting a new magic link.');
+        return;
+      }
+
+      const supabase = createBrowserClient<Database>(
+        process.env.NEXT_PUBLIC_SUPABASE_URL!,
+        process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+      );
+
+      const { error } = await supabase.auth.exchangeCodeForSession(code);
+
+      if (error) {
+        console.error(error);
+        setMessage('Could not complete sign-in. Try again.');
+        return;
+      }
+
+      // 2. On success → redirect to dashboard
+      router.replace('/dashboard');
+    };
+
+    run();
   }, [router]);
 
   return (
-    <main className="min-h-screen flex items-center justify-center">
-      <p>Signing you in…</p>
+    <main style={{ minHeight: '100vh', display: 'grid', placeItems: 'center' }}>
+      <div>
+        <h1>Signing you in…</h1>
+        <p>{message}</p>
+      </div>
     </main>
   );
 }
