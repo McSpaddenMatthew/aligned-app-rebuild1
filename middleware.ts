@@ -14,7 +14,9 @@ export function middleware(req: NextRequest) {
   if (isPublic) return NextResponse.next();
 
   const hasSession =
-    req.cookies.get("sb-access-token") || req.cookies.get("sb-session");
+    req.cookies.get("sb-access-token") ||
+    req.cookies.get("sb-refresh-token") ||
+    req.cookies.get("sb-session");
 
   if (!hasSession) {
     const loginUrl = new URL("/login", url);
