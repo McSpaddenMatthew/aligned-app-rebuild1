@@ -1,177 +1,123 @@
+// pages/dashboard.tsx
 import { useEffect, useState } from "react";
 import { useRouter } from "next/router";
-import { createClient } from "@supabase/supabase-js";
+import { createClient, User } from "@supabase/supabase-js";
 
 const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+  process.env.NEXT_PUBLIC_SUPABASE_URL as string,
+  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY as string
 );
 
-type Summary = {
-  id: string;
-  job_title: string | null;
-  created_at: string;
-};
-
-export default function Dashboard() {
+export default function DashboardPage() {
   const router = useRouter();
+  const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
-  const [sessionOk, setSessionOk] = useState(false);
-
-  const [jobTitle, setJobTitle] = useState("");
-  const [jobDescription, setJobDescription] = useState("");
-  const [hmNotes, setHmNotes] = useState("");
-  const [recruiterNotes, setRecruiterNotes] = useState("");
-  const [generating, setGenerating] = useState(false);
-  const [summaries, setSummaries] = useState<Summary[]>([]);
 
   useEffect(() => {
-    supabase.auth.getSession().then(async ({ data: { session } }) => {
-      if (!session) {
-        router.replace("/");
+    const loadUser = async () => {
+      const { data, error } = await supabase.auth.getSession();
+
+      if (error) {
+        console.error("Error getting session:", error);
+        router.replace("/login");
         return;
       }
-      setSessionOk(true);
-      setLoading(false);
-      await loadSummaries();
-    });
-  }, [router]);
 
-  async function loadSummaries() {
-    const { data, error } = await supabase
-      .from("summaries")
-      .select("id, job_title, created_at")
-      .order("created_at", { ascending: false })
-      .limit(10);
+      const session = data.session;
 
-    if (!error && data) setSummaries(data as Summary[]);
-  }
-
-  // <-- THIS is the function we care about
-  async function handleGenerate(e: React.FormEvent) {
-    e.preventDefault();
-    if (!jobTitle || !jobDescription) {
-      alert("Please include at least Job Title and Job Description.");
-      return;
-    }
-    setGenerating(true);
-    try {
-      // Include the Supabase token so API can attach user_id
-      const { data: { session } } = await supabase.auth.getSession();
-      const token = session?.access_token || "";
-
-      const res = await fetch("/api/generate-summary", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: token ? `Bearer ${token}` : "",
-        },
-        body: JSON.stringify({
-          jobTitle,
-          jobDescription,
-          hmNotes,
-          recruiterNotes,
-        }),
-      });
-
-      // Surface REAL server error details
-      let payload: any = {};
-      try { payload = await res.json(); } catch {}
-      if (!res.ok) {
-        const msg = payload?.error || `HTTP ${res.status}`;
-        throw new Error(msg);
+      if (!session?.user) {
+        router.replace("/login");
+        return;
       }
 
-      const { id } = payload;
-      await loadSummaries();
-      router.push(`/cases/${id}`);
-    } catch (err: any) {
-      console.error("Generate error:", err);
-      alert(err?.message || "Failed to generate");
-    } finally {
-      setGenerating(false);
-    }
+      setUser(session.user);
+      setLoading(false);
+    };
+
+    loadUser();
+  }, [router]);
+
+  const handleLogout = async () => {
+    await supabase.auth.signOut();
+    router.replace("/login");
+  };
+
+  if (loading) {
+    return (
+      <main
+        style={{
+          minHeight: "100vh",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+        }}
+      >
+        <p>Loading your dashboard…</p>
+      </main>
+    );
   }
 
-  if (loading || !sessionOk) return null;
-
   return (
-    <main style={{maxWidth:1000, margin:"24px auto", padding:"0 16px", fontFamily:"ui-sans-serif,system-ui"}}>
-      <header style={{display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:16}}>
-        <h1 style={{margin:0}}>Recruiter Dashboard</h1>
-        <button
-          onClick={async () => { await supabase.auth.signOut(); window.location.href = "/"; }}
-          style={{padding:"8px 12px", borderRadius:10, border:"1px solid #e5e7eb", background:"white", cursor:"pointer"}}
+    <main
+      style={{
+        minHeight: "100vh",
+        background: "#f3f4f6",
+        padding: "3rem 1.5rem",
+      }}
+    >
+      <div
+        style={{
+          maxWidth: "960px",
+          margin: "0 auto",
+          background: "#ffffff",
+          borderRadius: "1rem",
+          padding: "2rem 2.5rem",
+          boxShadow: "0 20px 45px rgba(15,23,42,0.1)",
+        }}
+      >
+        <header
+          style={{
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "center",
+            marginBottom: "2rem",
+          }}
         >
-          Log out
-        </button>
-      </header>
+          <div>
+            <h1 style={{ fontSize: "1.75rem", marginBottom: "0.25rem" }}>
+              Aligned dashboard
+            </h1>
+            <p style={{ fontSize: "0.9rem", color: "#6b7280" }}>
+              Signed in as <strong>{user?.email}</strong>
+            </p>
+          </div>
 
-      <section style={{display:"grid", gap:12, border:"1px solid #e5e7eb", borderRadius:16, padding:16, marginBottom:24}}>
-        <h2 style={{margin:"0 0 8px"}}>Create a Hiring Manager–Ready Report</h2>
-        <form onSubmit={handleGenerate} style={{display:"grid", gap:12}}>
-          <div>
-            <label style={{display:"block", fontWeight:600}}>Job Title</label>
-            <input
-              value={jobTitle}
-              onChange={(e)=>setJobTitle(e.target.value)}
-              placeholder="Senior Director of Data Strategy"
-              style={{width:"100%", padding:"10px 12px", borderRadius:10, border:"1px solid #e5e7eb"}}
-            />
-          </div>
-          <div>
-            <label style={{display:"block", fontWeight:600}}>Job Description / Requirements</label>
-            <textarea
-              value={jobDescription}
-              onChange={(e)=>setJobDescription(e.target.value)}
-              rows={6}
-              placeholder="Paste the JD or key requirements here…"
-              style={{width:"100%", padding:"10px 12px", borderRadius:10, border:"1px solid #e5e7eb"}}
-            />
-          </div>
-          <div>
-            <label style={{display:"block", fontWeight:600}}>HM Conversation Notes (optional)</label>
-            <textarea
-              value={hmNotes}
-              onChange={(e)=>setHmNotes(e.target.value)}
-              rows={4}
-              placeholder="Paste transcript snippets or bullet notes from your HM call…"
-              style={{width:"100%", padding:"10px 12px", borderRadius:10, border:"1px solid #e5e7eb"}}
-            />
-          </div>
-          <div>
-            <label style={{display:"block", fontWeight:600}}>Recruiter Notes (optional)</label>
-            <textarea
-              value={recruiterNotes}
-              onChange={(e)=>setRecruiterNotes(e.target.value)}
-              rows={4}
-              placeholder="Anything else: market context, constraints, nice-to-haves, etc."
-              style={{width:"100%", padding:"10px 12px", borderRadius:10, border:"1px solid #e5e7eb"}}
-            />
-          </div>
           <button
-            type="submit"
-            disabled={generating}
-            style={{padding:"10px 14px", borderRadius:12, border:"1px solid #111827", background:"#111827", color:"white", cursor:"pointer"}}
+            onClick={handleLogout}
+            style={{
+              padding: "0.5rem 1rem",
+              borderRadius: "999px",
+              border: "1px solid #e5e7eb",
+              background: "#ffffff",
+              cursor: "pointer",
+              fontSize: "0.9rem",
+            }}
           >
-            {generating ? "Generating…" : "Generate Report"}
+            Sign out
           </button>
-        </form>
-      </section>
+        </header>
 
-      <section style={{border:"1px solid #e5e7eb", borderRadius:16, padding:16}}>
-        <h2 style={{margin:"0 0 8px"}}>Recent Reports</h2>
-        <div style={{display:"grid", gap:8}}>
-          {summaries.length === 0 ? (
-            <p>No reports yet.</p>
-          ) : summaries.map((s) => (
-            <a key={s.id} href={`/cases/${s.id}`} style={{padding:"10px 12px", border:"1px solid #e5e7eb", borderRadius:12, textDecoration:"none"}}>
-              <div style={{fontWeight:600}}>{s.job_title || "Untitled role"}</div>
-              <div style={{fontSize:12, opacity:.7}}>{new Date(s.created_at).toLocaleString()}</div>
-            </a>
-          ))}
-        </div>
-      </section>
+        <section>
+          <h2 style={{ fontSize: "1.25rem", marginBottom: "0.75rem" }}>
+            Next up for MVP
+          </h2>
+          <ul style={{ fontSize: "0.95rem", color: "#4b5563", paddingLeft: 20 }}>
+            <li>Build the “Create candidate summary” flow.</li>
+            <li>List summaries that belong only to this logged-in user.</li>
+            <li>Add a “shareable link” for each summary.</li>
+          </ul>
+        </section>
+      </div>
     </main>
   );
 }
