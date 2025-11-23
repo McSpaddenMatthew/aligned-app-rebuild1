@@ -1,14 +1,145 @@
 <!DOCTYPE html>
 <html lang="en">
-<head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Static MVP</title>
-</head>
-<body>
-  <script>
-const SUPABASE_URL = "https://wvnlmkedacuhldjcmcsp.supabase.co";  // <- use the exact Project URL from Project Settings → API
-const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Ind2bmxta2VkYWN1aGxkamNtY3NwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTQ1MzY4NTAsImV4cCI6MjA3MDExMjg1MH0.w44OkJlJoW-5bCodexomigsPQh02-vGJn7LghxI0ySQ";            // <- the anon public key from the same screen
-  </script>
-</body>
+  <head>
+    <meta charset="UTF-8" />
+    <title>Aligned – Evidence-first hiring reports</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <div class="page">
+      <header class="nav">
+        <div class="nav-left">
+          <div class="logo-mark">A</div>
+          <span class="logo-text">ALIGNED</span>
+        </div>
+        <button class="nav-login" id="navLoginBtn">Log in</button>
+      </header>
+
+      <main class="hero">
+        <!-- LEFT: copy -->
+        <section class="hero-left">
+          <div class="pill">HIRING MANAGERS WANT PROOF, NOT PITCHES</div>
+          <h1>
+            Hiring decisions need <span class="accent">evidence</span>.<br />
+            Recruiters need <span class="accent">trust</span>.
+          </h1>
+          <p class="hero-sub">
+            Aligned turns messy intake notes and resumes into decision-ready
+            candidate reports that speak your hiring manager’s language.
+          </p>
+
+          <button class="primary-cta" id="buildSummaryBtn">
+            Build my first summary →
+          </button>
+          <p class="secondary-note">
+            No installs. Just log in with email.
+          </p>
+
+          <div class="feature-row">
+            <div class="feature-card">
+              <h3>FOR RECRUITERS</h3>
+              <p>From ignored to indispensable.</p>
+            </div>
+            <div class="feature-card">
+              <h3>FOR HIRING MANAGERS</h3>
+              <p>Your words → our reports.</p>
+            </div>
+            <div class="feature-card">
+              <h3>FOR PE & EXEC TEAMS</h3>
+              <p>Fewer mis-hires, faster.</p>
+            </div>
+          </div>
+        </section>
+
+        <!-- RIGHT: auth card / app panel -->
+        <section class="hero-right">
+          <!-- Auth card (shown when logged OUT) -->
+          <div class="card" id="authCard">
+            <h2>Log in or sign up</h2>
+            <p class="card-sub">
+              Use your work email. We’ll send you a magic link — no passwords to
+              remember.
+            </p>
+
+            <form id="magicLinkForm">
+              <label for="emailInput">Work email</label>
+              <div class="email-row">
+                <input
+                  id="emailInput"
+                  type="email"
+                  required
+                  placeholder="you@firm.com"
+                />
+              </div>
+              <button type="submit" class="primary-cta full-width" id="sendLinkBtn">
+                Send magic link
+              </button>
+              <p class="status" id="statusMessage"></p>
+            </form>
+          </div>
+
+          <!-- App card (shown when logged IN) -->
+          <div class="card hidden" id="appCard">
+            <p class="eyebrow">You’re in</p>
+            <h2>From intake call → decision-ready report</h2>
+            <p class="card-sub">
+              Capture a candidate, tie them to a role, and draft your first
+              Aligned summary.
+            </p>
+
+            <div class="user-row">
+              <span class="user-label">Logged in as</span>
+              <span class="user-email" id="userEmail"></span>
+            </div>
+
+            <form id="summaryForm">
+              <label for="candidateName">Candidate name</label>
+              <input
+                id="candidateName"
+                type="text"
+                placeholder="e.g., Jordan Ellis"
+                required
+              />
+
+              <label for="targetRole">Target role</label>
+              <input
+                id="targetRole"
+                type="text"
+                placeholder="e.g., VP of Data Strategy"
+                required
+              />
+
+              <label for="notes">Call notes / highlights</label>
+              <textarea
+                id="notes"
+                rows="4"
+                placeholder="Key outcomes, risks, and why they may be aligned to the role..."
+                required
+              ></textarea>
+
+              <button type="submit" class="primary-cta full-width" id="saveSummaryBtn">
+                Save draft summary
+              </button>
+              <p class="status" id="summaryStatus"></p>
+            </form>
+
+            <button class="ghost-btn full-width" id="logoutBtn">
+              Log out
+            </button>
+          </div>
+        </section>
+      </main>
+
+      <footer class="footer">
+        <p>
+          Today: capture candidates and test the flow.
+          <span class="muted">Next: plug in the AI summary engine and HM-share links.</span>
+        </p>
+      </footer>
+    </div>
+
+    <!-- App logic -->
+    <script type="module" src="./app.js"></script>
+  </body>
 </html>
