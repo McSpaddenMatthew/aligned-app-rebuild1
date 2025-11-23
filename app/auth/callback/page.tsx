@@ -2,36 +2,43 @@
 
 import { useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { createClient } from "@supabase/supabase-js";
-
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL as string,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY as string
-);
+import { createBrowserClient } from "@/lib/supabase/client";
 
 export default function AuthCallback() {
   const router = useRouter();
+  const supabase = createBrowserClient();
 
   useEffect(() => {
-    async function handleSession() {
+    const handleAuth = async () => {
       try {
-        // This reads the token from the URL hash and stores the session
-        await supabase.auth.getSessionFromUrl({ storeSession: true });
+        // Handles magic-link / OTP / PKCE callbacks.
+        const { data, error } = await supabase.auth.exchangeCodeForSession(
+          window.location.href
+        );
 
-        // After session is stored, send them to dashboard
-        router.push("/dashboard");
-      } catch (error) {
-        console.error("Error handling auth callback:", error);
-        router.push("/login");
+        if (error || !data.session) {
+          console.error("Error exchanging code for session:", error);
+          router.replace("/login?error=callback");
+          return;
+        }
+
+        // Optional: honor ?next=/some/path
+        const url = new URL(window.location.href);
+        const next = url.searchParams.get("next") || "/dashboard";
+
+        router.replace(next);
+      } catch (err) {
+        console.error("Unexpected auth callback error:", err);
+        router.replace("/login?error=callback");
       }
-    }
+    };
 
-    handleSession();
-  }, [router]);
+    handleAuth();
+  }, [router, supabase]);
 
-    return (
-      <main className="min-h-screen flex items-center justify-center">
-        <p>Signing you in...</p>
-      </main>
-    );
+  return (
+    <main className="min-h-screen flex items-center justify-center">
+      <p>Signing you in…</p>
+    </main>
+  );
 }
