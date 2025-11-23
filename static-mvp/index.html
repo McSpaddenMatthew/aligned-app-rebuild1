@@ -1,0 +1,361 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Aligned – Static MVP</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      color-scheme: light;
+      --bg: #0f1115;
+      --panel: #161920;
+      --muted: #c5cedd;
+      --accent: #a7ff82;
+      --accent-2: #7ed7e1;
+      --card: #1f2430;
+      --border: #2a3040;
+      --danger: #ff6b6b;
+    }
+
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      background: radial-gradient(circle at 10% 20%, rgba(167,255,130,0.07), transparent 30%),
+                  radial-gradient(circle at 80% 0%, rgba(126,215,225,0.08), transparent 25%),
+                  var(--bg);
+      color: #e8edf7;
+      min-height: 100vh;
+    }
+    header {
+      position: sticky;
+      top: 0;
+      z-index: 10;
+      backdrop-filter: blur(14px);
+      background: rgba(15, 17, 21, 0.82);
+      border-bottom: 1px solid var(--border);
+    }
+    .nav {
+      max-width: 1100px;
+      margin: 0 auto;
+      padding: 16px 24px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    .logo {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-weight: 700;
+      font-size: 18px;
+      letter-spacing: 0.2px;
+    }
+    .logo span {
+      display: inline-flex;
+      width: 14px;
+      height: 14px;
+      background: linear-gradient(120deg, var(--accent), var(--accent-2));
+      border-radius: 4px;
+      box-shadow: 0 0 20px rgba(167,255,130,0.5);
+    }
+    .cta {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 10px 16px;
+      border-radius: 12px;
+      background: linear-gradient(120deg, #7ed7e1, #a7ff82);
+      color: #0f1115;
+      font-weight: 600;
+      border: none;
+      cursor: pointer;
+      box-shadow: 0 12px 30px rgba(126,215,225,0.3);
+      transition: transform 120ms ease, box-shadow 120ms ease;
+    }
+    .cta:hover { transform: translateY(-1px); box-shadow: 0 16px 35px rgba(167,255,130,0.3); }
+    main { max-width: 1100px; margin: 0 auto; padding: 32px 24px 80px; }
+    .hero {
+      display: grid;
+      grid-template-columns: 1.1fr 0.9fr;
+      gap: 32px;
+      padding: 40px;
+      background: rgba(31, 36, 48, 0.7);
+      border: 1px solid var(--border);
+      border-radius: 18px;
+      box-shadow: 0 24px 60px rgba(0,0,0,0.35);
+    }
+    .hero h1 { font-size: 42px; margin: 0 0 12px; }
+    .hero p { margin: 0 0 20px; color: var(--muted); line-height: 1.6; }
+    .hero .pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 12px;
+      background: rgba(167,255,130,0.08);
+      color: #c3ffb1;
+      border-radius: 999px;
+      border: 1px solid rgba(167,255,130,0.25);
+      font-weight: 600;
+      letter-spacing: 0.2px;
+    }
+    .card-grid {
+      margin-top: 32px;
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+      gap: 20px;
+    }
+    .card {
+      padding: 18px;
+      border-radius: 14px;
+      background: var(--card);
+      border: 1px solid var(--border);
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      position: relative;
+      overflow: hidden;
+    }
+    .card h3 { margin: 0; }
+    .card p { margin: 0; color: var(--muted); line-height: 1.55; }
+    .glow {
+      position: absolute;
+      inset: 0;
+      background: radial-gradient(circle at 30% 30%, rgba(167,255,130,0.15), transparent 40%);
+      opacity: 0;
+      transition: opacity 180ms ease;
+      pointer-events: none;
+    }
+    .card:hover .glow { opacity: 1; }
+    .panel {
+      margin-top: 28px;
+      padding: 20px;
+      border-radius: 14px;
+      background: linear-gradient(145deg, rgba(31,36,48,0.8), rgba(21,24,30,0.8));
+      border: 1px solid var(--border);
+    }
+    .panel h2 { margin-top: 0; }
+    .timeline {
+      display: grid;
+      gap: 12px;
+      margin-top: 12px;
+    }
+    .step {
+      display: grid;
+      grid-template-columns: 64px 1fr;
+      align-items: center;
+      gap: 12px;
+      padding: 14px;
+      border-radius: 12px;
+      border: 1px dashed var(--border);
+      background: rgba(255,255,255,0.01);
+    }
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 64px;
+      height: 64px;
+      border-radius: 12px;
+      background: rgba(126,215,225,0.12);
+      border: 1px solid rgba(126,215,225,0.4);
+      color: #7ed7e1;
+      font-weight: 700;
+      font-size: 14px;
+    }
+    .table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 12px;
+    }
+    .table th, .table td {
+      text-align: left;
+      padding: 10px 12px;
+      border-bottom: 1px solid var(--border);
+    }
+    .table th { color: #f1f4f9; }
+    .table td { color: var(--muted); }
+    .footer {
+      margin-top: 50px;
+      padding: 24px;
+      text-align: center;
+      color: var(--muted);
+      border-top: 1px solid var(--border);
+    }
+    .chip-row { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+    .chip { background: rgba(255,255,255,0.04); border: 1px solid var(--border); color: #fff; padding: 8px 12px; border-radius: 999px; font-weight: 600; font-size: 12px; letter-spacing: 0.2px; }
+    .warning { color: var(--danger); font-weight: 700; }
+    code { background: rgba(255,255,255,0.05); padding: 2px 6px; border-radius: 6px; }
+    @media (max-width: 900px) {
+      .hero { grid-template-columns: 1fr; }
+      .step { grid-template-columns: 48px 1fr; }
+      .badge { width: 48px; height: 48px; }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="nav">
+      <div class="logo"><span></span>Aligned Static MVP</div>
+      <button class="cta">Start aligned workspace</button>
+    </div>
+  </header>
+  <main>
+    <section class="hero">
+      <div>
+        <div class="pill">AI workspace orchestration</div>
+        <h1>Static MVP for the Aligned supabase flow.</h1>
+        <p>Use this page to verify your Supabase credentials, test anonymous onboarding, and see how the low-level pieces fit together before wiring everything into Next.js.</p>
+        <div class="chip-row">
+          <div class="chip">Supabase auth</div>
+          <div class="chip">Realtime inbox</div>
+          <div class="chip">Action templates</div>
+          <div class="chip">Email sync</div>
+        </div>
+      </div>
+      <div class="panel">
+        <h2>Quick instructions</h2>
+        <p>Paste your Supabase URL and anon key into the script constants at the bottom of this file. Then run the quick checks to confirm connectivity.</p>
+        <ul>
+          <li>Click “Create test user” to store a fake profile.</li>
+          <li>Use “List messages” to see demo inbox data.</li>
+          <li>Review the timeline to understand data flow.</li>
+        </ul>
+      </div>
+    </section>
+
+    <section class="card-grid">
+      <div class="card">
+        <div class="glow"></div>
+        <h3>Onboarding</h3>
+        <p>Creates a new workspace, seeds a few inbox messages, and links actions to the user record so the dashboard is ready on first load.</p>
+      </div>
+      <div class="card">
+        <div class="glow"></div>
+        <h3>Context-aware AI</h3>
+        <p>We enrich each message with sender reputation, historical cadence, and existing tasks. The AI can draft the best follow-up without guesswork.</p>
+      </div>
+      <div class="card">
+        <div class="glow"></div>
+        <h3>Safety rails</h3>
+        <p>Templates are built from typed actions. Users approve before sending, and we log every call with rationale and confidence.</p>
+      </div>
+      <div class="card">
+        <div class="glow"></div>
+        <h3>Handoff-ready</h3>
+        <p>Export a summary packet with every decision, open thread, and next action. Human teammates can review in seconds.</p>
+      </div>
+    </section>
+
+    <section class="panel">
+      <h2>How data flows</h2>
+      <div class="timeline">
+        <div class="step">
+          <div class="badge">01</div>
+          <div>
+            <strong>Auth / session</strong>
+            <p>Use Supabase Auth to create or sign in a user. Store the session token for subsequent reads on their workspace.</p>
+          </div>
+        </div>
+        <div class="step">
+          <div class="badge">02</div>
+          <div>
+            <strong>Seed inbox</strong>
+            <p>Insert demo messages into <code>messages</code> and <code>actions</code> tables to populate the interface immediately.</p>
+          </div>
+        </div>
+        <div class="step">
+          <div class="badge">03</div>
+          <div>
+            <strong>Generate guidance</strong>
+            <p>Call the hosted model with the synced context and render suggestions the user can approve or edit.</p>
+          </div>
+        </div>
+        <div class="step">
+          <div class="badge">04</div>
+          <div>
+            <strong>Ship work</strong>
+            <p>Send the reply via your preferred channel and log the execution for analytics and undo capability.</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="panel">
+      <h2>Sanity checks</h2>
+      <p class="warning">These buttons are wired to Supabase. Ensure you replaced the constants before running.</p>
+      <div class="chip-row">
+        <button class="cta" id="createUser">Create test user</button>
+        <button class="cta" id="listMessages">List messages</button>
+        <button class="cta" id="signOut">Sign out</button>
+      </div>
+      <pre id="log" style="margin-top:16px; padding:14px; background:#0d0f14; border:1px solid var(--border); border-radius:10px; max-height:240px; overflow:auto;">Waiting for actions...</pre>
+    </section>
+
+    <section class="panel">
+      <h2>Schema highlights</h2>
+      <table class="table">
+        <thead><tr><th>Table</th><th>Purpose</th><th>Key fields</th></tr></thead>
+        <tbody>
+          <tr><td>profiles</td><td>Stores auth-linked profile rows.</td><td><code>id</code>, <code>email</code>, <code>role</code>, <code>created_at</code></td></tr>
+          <tr><td>messages</td><td>Inbound/outbound communications to align.</td><td><code>id</code>, <code>profile_id</code>, <code>direction</code>, <code>body</code></td></tr>
+          <tr><td>actions</td><td>Suggested or queued actions for a message.</td><td><code>id</code>, <code>message_id</code>, <code>type</code>, <code>status</code></td></tr>
+        </tbody>
+      </table>
+    </section>
+
+    <footer class="footer">
+      This static MVP is for quick Supabase smoke-tests. Wire these flows into Next.js once your credentials are validated.
+    </footer>
+  </main>
+
+  <script type="module" src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script>
+    const SUPABASE_URL = "YOUR_REAL_URL_HERE";
+    const SUPABASE_ANON_KEY = "YOUR_REAL_ANON_KEY_HERE";
+
+    const client = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+    const logEl = document.getElementById('log');
+
+    const appendLog = (message) => {
+      const time = new Date().toLocaleTimeString();
+      logEl.textContent = `[${time}] ${message}\n` + logEl.textContent;
+    };
+
+    document.getElementById('createUser').addEventListener('click', async () => {
+      appendLog('Creating anonymous user...');
+      const email = `static+${Date.now()}@aligned.test`;
+      const password = 'aligned-static-demo';
+      const { data, error } = await client.auth.signUp({ email, password });
+      if (error) {
+        appendLog(`Error: ${error.message}`);
+      } else {
+        appendLog(`User created: ${data.user?.email}`);
+      }
+    });
+
+    document.getElementById('listMessages').addEventListener('click', async () => {
+      appendLog('Loading messages from Supabase...');
+      const { data, error } = await client.from('messages').select('*').limit(5);
+      if (error) {
+        appendLog(`Error: ${error.message}`);
+      } else {
+        appendLog(`Found ${data.length} message(s):`);
+        appendLog(JSON.stringify(data, null, 2));
+      }
+    });
+
+    document.getElementById('signOut').addEventListener('click', async () => {
+      const { error } = await client.auth.signOut();
+      if (error) {
+        appendLog(`Error: ${error.message}`);
+      } else {
+        appendLog('Signed out and cleared session.');
+      }
+    });
+  </script>
+</body>
+</html>
