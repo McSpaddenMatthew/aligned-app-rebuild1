@@ -4,19 +4,33 @@ import { useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@supabase/supabase-js";
 
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL as string,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY as string
-);
-
 export default function AuthCallback() {
   const router = useRouter();
 
   useEffect(() => {
     async function handleSession() {
+      const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+      const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+
+      if (!supabaseUrl || !supabaseAnonKey) {
+        console.error("Missing Supabase environment variables");
+        router.push("/login");
+        return;
+      }
+
+      const supabase = createClient(supabaseUrl, supabaseAnonKey);
+
       try {
-        // This reads the token from the URL hash and stores the session
-        await supabase.auth.getSessionFromUrl({ storeSession: true });
+        // Exchange the auth code in the callback URL for a Supabase session
+        // and store it in the browser. This is the v2 equivalent of the
+        // deprecated `getSessionFromUrl` helper.
+        const code = new URL(window.location.href).searchParams.get("code");
+
+        if (!code) throw new Error("Missing auth code");
+
+        const { error } = await supabase.auth.exchangeCodeForSession(code);
+
+        if (error) throw error;
 
         // After session is stored, send them to dashboard
         router.push("/dashboard");
