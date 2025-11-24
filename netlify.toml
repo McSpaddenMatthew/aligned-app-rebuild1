@@ -1,0 +1,13 @@
+# netlify.toml – Aligned Next.js + Supabase
+
+[build]
+  command = "npm run build"
+  publish = ".next"
+
+[build.environment]
+  NODE_VERSION = "20.10.0"
+  NEXT_TELEMETRY_DISABLED = "1"
+
+# Use the official Netlify Next.js plugin
+[[plugins]]
+  package = "@netlify/plugin-nextjs"
